@@ -20,6 +20,7 @@ const showHelp = () => {
       `  ${colors.green("init")}        Create ralph.config.yml and update .gitignore\n` +
       `  ${colors.green("plan")}        Generate tasks.md with a single round of questions\n` +
       `  ${colors.green("run")}         Execute the loop until completion\n` +
+      `  ${colors.green("revise")}      Add new tasks from feedback\n` +
       `  ${colors.green("view")}        Show tasks, criteria, and config summaries\n` +
       `  ${colors.green("reset")}       Reset all tasks in tasks.md to [ ]\n` +
       `  ${colors.green("docker")}      Pick a Docker base image via Codex and update config\n\n` +
@@ -27,6 +28,7 @@ const showHelp = () => {
       `  ralph-codex init\n` +
       `  ralph-codex plan "Add screenshot flow"\n` +
       `  ralph-codex run --max-iterations 15\n` +
+      `  ralph-codex revise "Improve copy"\n` +
       `  ralph-codex view tasks --only pending\n` +
       `  ralph-codex reset\n\n` +
       `${colors.gray('Tip: run "ralph-codex <command> --help" for command options.')}\n\n`

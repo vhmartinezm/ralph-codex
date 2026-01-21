@@ -29,6 +29,7 @@ npx ralph-codex --help
 ralph-codex init
 ralph-codex plan "Add screenshot flow for /demo" --output tasks.md
 ralph-codex run
+ralph-codex revise "Improve the flow after QA"
 ralph-codex view
 ralph-codex reset
 ```
@@ -85,6 +86,21 @@ Useful options:
 - `--stop-on-error` stop on the first error.
 - `--no-tail` disable log/scratchpad tailing.
 - `--reasoning [effort]` override reasoning effort; omit value to pick from a list (defaults to medium).
+
+### revise
+
+Add new tasks from feedback without changing existing tasks.
+
+```bash
+ralph-codex revise "<feedback>" [--tasks <path>] [--run]
+```
+
+Useful options:
+
+- `--tasks <path>` point to a custom tasks file.
+- `--config <path>` use a custom config file.
+- `--reasoning [effort]` override reasoning effort; omit value to pick from a list.
+- `--run` run after approving the changes.
 
 ### view
 
