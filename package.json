@@ -1,0 +1,30 @@
+{
+  "name": "ralph-codex",
+  "version": "0.1.0",
+  "description": "Codex-first Ralph-style planning and run loops",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "ralph-codex": "bin/ralph-codex.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "enquirer": "^2.4.1",
+    "js-yaml": "^4.1.0"
+  },
+  "files": [
+    "bin",
+    "src",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "codex",
+    "ralph",
+    "cli",
+    "automation"
+  ]
+}

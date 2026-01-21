@@ -1,0 +1,51 @@
+version: 1
+
+codex:
+  model: null # Example: gpt-5-codex
+  profile: null # Codex CLI profile name
+  sandbox: null # read-only | workspace-write | danger-full-access
+  ask_for_approval: null # untrusted | on-failure | on-request | never
+  full_auto: false # true enables workspace-write + on-request
+  model_reasoning_effort: null # low | medium | high | extra-high
+
+docker:
+  enabled: false
+  use_for_plan: false
+  dockerfile: Dockerfile.ralph
+  image: ralph-runner
+  base_image: node:20-bullseye
+  workdir: /workspace
+  codex_install: null # Example: npm install -g @openai/codex
+  codex_home: .ralph/codex # Writable codex home inside the repo
+  mount_codex_config: true # Seed codex_home from host ~/.codex if empty
+  tty: auto # auto | true | false
+  pass_env:
+    - OPENAI_API_KEY
+  apt_packages:
+    - git
+    - python3
+  npm_globals: []
+  pip_packages: []
+  auto_fix: true
+  fix_attempts: 2
+  fix_use_host: true
+  fix_log: .ralph/docker-build.log
+  cleanup: image # none | image | all
+
+plan:
+  auto_detect_success_criteria: false
+  tasks_path: tasks.md
+  success_choices:
+    - Run the project's primary test suite
+    - Run relevant linters or static checks
+    - Run the project's build or CI checks
+  default_success_criteria:
+    - Run the project's primary test suite
+
+run:
+  tasks_path: tasks.md
+  max_iterations: 15
+  completion_promise: LOOP_COMPLETE
+  tail_log: true
+  tail_scratchpad: false
+  required_commands: []
