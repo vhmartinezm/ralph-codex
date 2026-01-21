@@ -34,6 +34,8 @@ ralph-codex reset
 
 ## Command reference
 
+Use `--help` with any command to see its available options.
+
 ### init
 
 Create `ralph.config.yml` and add `.ralph` to `.gitignore`.
@@ -155,7 +157,8 @@ CLI flags always override config values.
 
 ## Output styling
 
-Codex output is colorized when stdout is a TTY. Set `NO_COLOR=1` to disable.
+Codex output is colorized when stdout is a TTY. Plan uses spinners and run shows a task
+progress bar when interactive. Set `NO_COLOR=1` to disable color styling.
 
 ## Troubleshooting
 

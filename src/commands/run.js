@@ -4,6 +4,7 @@ const os = require("os");
 const path = require("path");
 const yaml = require("js-yaml");
 const { Confirm, Select } = require("enquirer");
+const { colors, createLogStyler, createProgressBar } = require("../ui/terminal");
 
 const root = process.cwd();
 const agentDir = path.join(root, ".ralph");
@@ -27,9 +28,14 @@ let modelReasoningEffort = null;
 let activeDockerConfig = null;
 let streamScratchpad = false;
 let reasoningChoice;
+let showHelp = false;
 
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i];
+  if (arg === "--help" || arg === "-h" || arg === "help") {
+    showHelp = true;
+    continue;
+  }
   if (arg === "--max-iterations") {
     maxIterations = Number(argv[i + 1] || 0) || maxIterations;
     i += 1;
@@ -120,6 +126,37 @@ for (let i = 0; i < argv.length; i += 1) {
   }
 }
 
+function printHelp() {
+  process.stdout.write(
+    `\n${colors.cyan("ralph-codex run [options]")}\n\n` +
+      `${colors.yellow("Options:")}\n` +
+      `  ${colors.green("--input <path>")}                  Read tasks from a custom file (alias of --tasks)\n` +
+      `  ${colors.green("--tasks <path>")}                  Read tasks from a custom file (default: tasks.md)\n` +
+      `  ${colors.green("--max-iterations <n>")}            Max iterations (default: 15)\n` +
+      `  ${colors.green("--quiet, -q")}                     Reduce output\n` +
+      `  ${colors.green("--completion-promise <text>")}     Completion token (default: LOOP_COMPLETE)\n` +
+      `  ${colors.green("--stop-on-error")}                 Stop on first error\n` +
+      `  ${colors.green("--no-log-stream")}                 Disable log streaming\n` +
+      `  ${colors.green("--tail-log")}                      Stream .ralph/loop-log.md\n` +
+      `  ${colors.green("--tail-scratchpad")}               Stream .ralph/summary.md\n` +
+      `  ${colors.green("--no-tail")}                       Disable log + scratchpad streaming\n` +
+      `  ${colors.green("--config <path>")}                 Path to ralph.config.yml\n` +
+      `  ${colors.green("--model <name>, -m")}              Codex model\n` +
+      `  ${colors.green("--profile <name>, -p")}            Codex CLI profile\n` +
+      `  ${colors.green("--sandbox <mode>")}                read-only | workspace-write | danger-full-access\n` +
+      `  ${colors.green("--no-sandbox")}                    Use danger-full-access\n` +
+      `  ${colors.green("--ask-for-approval <mode>")}       untrusted | on-failure | on-request | never\n` +
+      `  ${colors.green("--full-auto")}                     workspace-write + on-request\n` +
+      `  ${colors.green("--reasoning [effort]")}            low | medium | high | extra-high (omit to pick)\n` +
+      `  ${colors.green("-h, --help")}                      Show help\n\n`
+  );
+}
+
+if (showHelp) {
+  printHelp();
+  process.exit(0);
+}
+
 function loadConfig(configFilePath) {
   if (!configFilePath) return {};
   if (!fs.existsSync(configFilePath)) return {};
@@ -163,94 +200,6 @@ async function promptReasoningEffort(currentValue) {
     initial,
   });
   return prompt.run();
-}
-
-function createLogStyler() {
-  const enabled = process.stdout.isTTY && !process.env.NO_COLOR;
-  const ansi = {
-    reset: "\u001b[0m",
-    dim: "\u001b[2m",
-    red: "\u001b[31m",
-    green: "\u001b[32m",
-    yellow: "\u001b[33m",
-    blue: "\u001b[34m",
-    magenta: "\u001b[35m",
-    cyan: "\u001b[36m",
-    gray: "\u001b[90m",
-  };
-  const color = (code, text) => (enabled ? `${code}${text}${ansi.reset}` : text);
-  const pathRegex =
-    /(^|\s)(\.{0,2}\/[A-Za-z0-9._/-]+|[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+|[A-Za-z0-9._-]+\.(?:js|ts|tsx|jsx|md|yml|yaml|json|toml|go|py|rs|java|kt|sh|bash|zsh|sql|css|scss|html|txt))(?!\w)/g;
-
-  let inCodeBlock = false;
-  let inHeader = false;
-  let inDiffHunk = false;
-
-  const highlightInline = (line) =>
-    line.replace(/`([^`]+)`/g, (match) => color(ansi.blue, match));
-  const highlightPaths = (line) =>
-    line.replace(pathRegex, (match, prefix, pathPart) => {
-      return `${prefix}${color(ansi.magenta, pathPart)}`;
-    });
-
-  const formatLine = (line) => {
-    if (!enabled || line === "") return line;
-    const trimmed = line.trim();
-    if (trimmed === "--------") {
-      inHeader = !inHeader;
-      return color(ansi.gray, line);
-    }
-    if (inHeader) return color(ansi.gray, line);
-    if (trimmed.startsWith("```")) {
-      inCodeBlock = !inCodeBlock;
-      return color(ansi.gray, line);
-    }
-    if (inCodeBlock) return color(ansi.gray, line);
-
-    if (/^diff --|^index |^\+\+\+|^---/.test(trimmed)) {
-      inDiffHunk = false;
-      return color(ansi.magenta, line);
-    }
-    if (/^@@/.test(trimmed)) {
-      inDiffHunk = true;
-      return color(ansi.magenta, line);
-    }
-
-    const looksLikeList = /^[-+]\s+/.test(trimmed);
-    if (inDiffHunk && /^\+\s?/.test(trimmed) && !/^\+\+\+/.test(trimmed) && !looksLikeList) {
-      return color(ansi.green, line);
-    }
-    if (inDiffHunk && /^-\s?/.test(trimmed) && !/^---/.test(trimmed) && !looksLikeList) {
-      return color(ansi.red, line);
-    }
-    if (/^-\s+\[[xX]\]/.test(trimmed)) return color(ansi.green, line);
-    if (/^-\s+\[~\]/.test(trimmed)) return color(ansi.yellow, line);
-    if (/^-\s+\[\s\]/.test(trimmed)) return color(ansi.gray, line);
-
-    if (/\b(error|failed|exception|traceback|fatal)\b/i.test(trimmed)) {
-      return color(ansi.red, line);
-    }
-    if (/\b(warn|warning|deprecated)\b/i.test(trimmed)) {
-      return color(ansi.yellow, line);
-    }
-    if (/\b(success|succeeded|done|complete|completed)\b/i.test(trimmed)) {
-      return color(ansi.green, line);
-    }
-    if (/^#{1,6}\s+/.test(trimmed)) return color(ansi.cyan, line);
-    if (trimmed.endsWith("?")) return color(ansi.yellow, line);
-    if (/^\$\s+/.test(trimmed) || /^>\s+/.test(trimmed)) {
-      return color(ansi.blue, line);
-    }
-
-    let styled = highlightInline(line);
-    if (!styled.includes("`")) {
-      styled = highlightPaths(styled);
-    }
-    if (trimmed.length >= 140) return color(ansi.dim, styled);
-    return styled;
-  };
-
-  return { formatLine };
 }
 
 function resolveDockerConfig(config) {
@@ -319,12 +268,10 @@ function ensureDockerImage(dockerConfig) {
   while (attempt <= dockerConfig.fixAttempts) {
     const result = buildDockerImage(dockerConfig);
     if (result.notRunning) {
-      const red = "\u001b[31m";
-      const reset = "\u001b[0m";
       const msg =
         result.output ||
         "Docker is not running. Start Docker Desktop or Colima and retry.";
-      process.stderr.write(`\n${red}${msg}${reset}\n`);
+      process.stderr.write(`\n${colors.red(msg)}\n`);
       process.exit(result.status ?? 1);
     }
     if (detectDockerStorageIssue(result.output)) {
@@ -532,12 +479,10 @@ if (typeof runConfig.tail_scratchpad === "boolean") {
   if (activeDockerConfig?.enabled) {
     const probe = spawnSync("docker", ["info"], { encoding: "utf8" });
     if (probe.status !== 0) {
-      const red = "\u001b[31m";
-      const reset = "\u001b[0m";
       const msg =
         `${probe.stdout || ""}\n${probe.stderr || ""}`.trim() ||
         "Docker is not running. Start Docker Desktop or Colima and retry.";
-      process.stderr.write(`\n${red}${msg}${reset}\n`);
+      process.stderr.write(`\n${colors.red(msg)}\n`);
       process.exit(probe.status ?? 1);
     }
   }
@@ -735,13 +680,10 @@ function detectDockerStorageIssue(output) {
 }
 
 function printDockerStorageHint(output) {
-  const red = "\u001b[31m";
-  const yellow = "\u001b[33m";
-  const reset = "\u001b[0m";
   process.stderr.write(
-    `\n${red}Docker storage error detected.${reset}\n` +
-      `${yellow}Likely cause:${reset} Docker Desktop filesystem is read-only or corrupted.\n` +
-      `${yellow}Recommended fixes:${reset}\n` +
+    `\n${colors.red("Docker storage error detected.")}\n` +
+      `${colors.yellow("Likely cause:")} Docker Desktop filesystem is read-only or corrupted.\n` +
+      `${colors.yellow("Recommended fixes:")}\n` +
       `- Restart Docker Desktop\n` +
       `- Check disk space\n` +
       `- Docker Desktop -> Troubleshoot -> Clean/Purge data\n` +
@@ -750,7 +692,7 @@ function printDockerStorageHint(output) {
   );
   if (output) {
     process.stderr.write(
-      `${yellow}Raw error (truncated):${reset} ${truncate(output, 240)}\n`
+      `${colors.yellow("Raw error (truncated):")} ${truncate(output, 240)}\n`
     );
   }
 }
@@ -968,11 +910,9 @@ async function main() {
 
   const warnings = validateTasksFile(tasksFile);
   if (warnings.length > 0) {
-    const yellow = "\u001b[33m";
-    const reset = "\u001b[0m";
-    process.stdout.write(`\n${yellow}Task file warnings:${reset}\n`);
+    process.stdout.write(`\n${colors.yellow("Task file warnings:")}\n`);
     warnings.forEach((warning) =>
-      process.stdout.write(`${yellow}- ${warning}${reset}\n`)
+      process.stdout.write(`${colors.yellow(`- ${warning}`)}\n`)
     );
     process.stdout.write("\n");
 
@@ -990,39 +930,50 @@ async function main() {
 
   const initialProgress = getTaskProgress(tasksFile);
   if (initialProgress.total > 0 && initialProgress.completed === initialProgress.total) {
-    const green = "\u001b[32m";
-    const reset = "\u001b[0m";
     process.stdout.write(
-      `\n${green}All tasks are already completed (${initialProgress.completed}/${initialProgress.total}).${reset}\n`
+      `\n${colors.green(
+        `All tasks are already completed (${initialProgress.completed}/${initialProgress.total}).`
+      )}\n`
     );
     process.exit(0);
   }
 
+  const progressBar = createProgressBar();
   const barWidth = 20;
+  const renderProgressBar = (progress, iteration) => {
+    if (!progressBar || progress.total === 0) return false;
+    progressBar.start(progress.total, progress.completed, {
+      blocked: progress.blocked,
+      iteration,
+      iterations: maxIterations,
+    });
+    progressBar.stop();
+    return true;
+  };
+
   let iterationsUsed = 0;
   for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
     iterationsUsed = iteration;
     const prompt = `${promptBase}\nIteration: ${iteration} of ${maxIterations}\n`;
     const progress = getTaskProgress(tasksFile);
-    const blue = "\u001b[34m";
-    const cyan = "\u001b[36m";
-    const green = "\u001b[32m";
-    const yellow = "\u001b[33m";
-    const reset = "\u001b[0m";
     const filled = Math.round((progress.percent / 100) * barWidth);
     const empty = barWidth - filled;
     const bar = `[${"#".repeat(filled)}${"-".repeat(empty)}]`;
     const lastBlocker = getLastBlocker(logPath);
     process.stdout.write(
-      `\n${blue}=== Iteration ${iteration}/${maxIterations} ===${reset}\n` +
-        `${cyan}${bar}${reset} ` +
-        `${green}✓ ${progress.completed}${reset} ` +
-        `${yellow}~ ${progress.blocked}${reset} / ` +
-        `${progress.total} (${progress.percent}%)\n`
+      `\n${colors.blue(`=== Iteration ${iteration}/${maxIterations} ===`)}\n`
     );
+    if (!renderProgressBar(progress, iteration)) {
+      process.stdout.write(
+        `${colors.cyan(bar)} ` +
+          `${colors.green(`✓ ${progress.completed}`)} ` +
+          `${colors.yellow(`~ ${progress.blocked}`)} / ` +
+          `${progress.total} (${progress.percent}%)\n`
+      );
+    }
     if (lastBlocker) {
       process.stdout.write(
-        `${yellow}Last blocker: ${truncate(lastBlocker, 140)}${reset}\n\n`
+        `${colors.yellow(`Last blocker: ${truncate(lastBlocker, 140)}`)}\n\n`
       );
     } else {
       process.stdout.write("\n");
@@ -1070,13 +1021,9 @@ async function main() {
     }
   }
 
-  const green = "\u001b[32m";
-  const red = "\u001b[31m";
-  const reset = "\u001b[0m";
-
   if (completed) {
     process.stdout.write(
-      `\n${green}Ralph run complete: LOOP_COMPLETE detected.${reset}\n`
+      `\n${colors.green("Ralph run complete: LOOP_COMPLETE detected.")}\n`
     );
     cleanupDockerImage(activeDockerConfig || { enabled: false });
     process.exit(0);
@@ -1084,7 +1031,7 @@ async function main() {
 
   if (fatalDockerError) {
     process.stderr.write(
-      `\n${red}Ralph run failed: Docker storage error.${reset}\n`
+      `\n${colors.red("Ralph run failed: Docker storage error.")}\n`
     );
     cleanupDockerImage(activeDockerConfig || { enabled: false });
     process.exit(1);
@@ -1098,8 +1045,8 @@ async function main() {
   const hint =
     "Review .ralph/loop-log.md for blockers and decide next steps.";
 
-  process.stderr.write(`\n${red}Ralph run failed: ${reason}${reset}\n`);
-  process.stderr.write(`${red}${hint}${reset}\n`);
+  process.stderr.write(`\n${colors.red(`Ralph run failed: ${reason}`)}\n`);
+  process.stderr.write(`${colors.red(hint)}\n`);
   cleanupDockerImage(activeDockerConfig || { enabled: false });
   process.exit(1);
 }

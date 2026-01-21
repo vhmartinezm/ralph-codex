@@ -1,15 +1,21 @@
 const fs = require("fs");
 const path = require("path");
 const yaml = require("js-yaml");
+const { colors } = require("../ui/terminal");
 
 const root = process.cwd();
 const argv = process.argv.slice(2);
 
 let tasksPath = "tasks.md";
 let configPath = null;
+let showHelp = false;
 
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i];
+  if (arg === "--help" || arg === "-h" || arg === "help") {
+    showHelp = true;
+    continue;
+  }
   if (arg === "--tasks") {
     tasksPath = argv[i + 1];
     i += 1;
@@ -20,6 +26,21 @@ for (let i = 0; i < argv.length; i += 1) {
     i += 1;
     continue;
   }
+}
+
+function printHelp() {
+  process.stdout.write(
+    `\n${colors.cyan("ralph-codex reset [options]")}\n\n` +
+      `${colors.yellow("Options:")}\n` +
+      `  ${colors.green("--tasks <path>")}                  Tasks file to reset (default: tasks.md)\n` +
+      `  ${colors.green("--config <path>")}                 Path to ralph.config.yml\n` +
+      `  ${colors.green("-h, --help")}                      Show help\n\n`
+  );
+}
+
+if (showHelp) {
+  printHelp();
+  process.exit(0);
 }
 
 function loadConfig(configFilePath) {

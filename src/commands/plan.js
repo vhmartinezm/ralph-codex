@@ -4,6 +4,7 @@ const os = require("os");
 const path = require("path");
 const { Confirm, Editor, Input, MultiSelect, Select } = require("enquirer");
 const yaml = require("js-yaml");
+const { colors, createLogStyler, createSpinner } = require("../ui/terminal");
 
 const root = process.cwd();
 const agentDir = path.join(root, ".ralph");
@@ -22,10 +23,15 @@ let modelReasoningEffort = null;
 let activeDockerConfig = null;
 let autoDetectSuccessCriteria = null;
 let reasoningChoice;
+let showHelp = false;
 const ideaParts = [];
 
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i];
+  if (arg === "--help" || arg === "-h" || arg === "help") {
+    showHelp = true;
+    continue;
+  }
   if (arg === "--max-iterations") {
     maxIterations = argv[i + 1];
     i += 1;
@@ -93,6 +99,32 @@ for (let i = 0; i < argv.length; i += 1) {
     continue;
   }
   ideaParts.push(arg);
+}
+
+function printHelp() {
+  process.stdout.write(
+    `\n${colors.cyan('ralph-codex plan "<idea>" [options]')}\n\n` +
+      `${colors.yellow("Options:")}\n` +
+      `  ${colors.green("--output <path>")}                 Write tasks to a custom file (alias of --tasks)\n` +
+      `  ${colors.green("--tasks <path>")}                  Write tasks to a custom file (default: tasks.md)\n` +
+      `  ${colors.green("--max-iterations <n>")}            Max planning iterations (default: 1)\n` +
+      `  ${colors.green("--config <path>")}                 Path to ralph.config.yml\n` +
+      `  ${colors.green("--model <name>, -m")}              Codex model\n` +
+      `  ${colors.green("--profile <name>, -p")}            Codex CLI profile\n` +
+      `  ${colors.green("--sandbox <mode>")}                read-only | workspace-write | danger-full-access\n` +
+      `  ${colors.green("--no-sandbox")}                    Use danger-full-access\n` +
+      `  ${colors.green("--ask-for-approval <mode>")}       untrusted | on-failure | on-request | never\n` +
+      `  ${colors.green("--full-auto")}                     workspace-write + on-request\n` +
+      `  ${colors.green("--reasoning [effort]")}            low | medium | high | extra-high (omit to pick)\n` +
+      `  ${colors.green("--detect-success-criteria")}       Add auto-detected checks\n` +
+      `  ${colors.green("--no-detect-success-criteria")}    Disable auto-detect\n` +
+      `  ${colors.green("-h, --help")}                      Show help\n\n`
+  );
+}
+
+if (showHelp) {
+  printHelp();
+  process.exit(0);
 }
 
 const idea = ideaParts.join(" ").trim();
@@ -623,117 +655,7 @@ When done, output exactly: LOOP_COMPLETE
 `;
 }
 
-function startSpinner(message) {
-  if (!process.stdout.isTTY) {
-    process.stdout.write(`${message}\n`);
-    return () => {};
-  }
-  const frames = ["|", "/", "-", "\\"];
-  let index = 0;
-  const render = () => `${message} ${frames[index % frames.length]}`;
-  process.stdout.write(`\r${render()}`);
-  const timer = setInterval(() => {
-    index += 1;
-    process.stdout.write(`\r${render()}`);
-  }, 120);
-  return () => {
-    clearInterval(timer);
-    const clear = " ".repeat(message.length + 2);
-    process.stdout.write(`\r${clear}\r`);
-  };
-}
-
-function createLogStyler() {
-  const enabled = process.stdout.isTTY && !process.env.NO_COLOR;
-  const ansi = {
-    reset: "\u001b[0m",
-    dim: "\u001b[2m",
-    red: "\u001b[31m",
-    green: "\u001b[32m",
-    yellow: "\u001b[33m",
-    blue: "\u001b[34m",
-    magenta: "\u001b[35m",
-    cyan: "\u001b[36m",
-    gray: "\u001b[90m",
-  };
-
-  const color = (code, text) => (enabled ? `${code}${text}${ansi.reset}` : text);
-  const pathRegex =
-    /(^|\s)(\.{0,2}\/[A-Za-z0-9._/-]+|[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+|[A-Za-z0-9._-]+\.(?:js|ts|tsx|jsx|md|yml|yaml|json|toml|go|py|rs|java|kt|sh|bash|zsh|sql|css|scss|html|txt))(?!\w)/g;
-
-  let inCodeBlock = false;
-  let inHeader = false;
-  let inDiffHunk = false;
-
-  const highlightInline = (line) =>
-    line.replace(/`([^`]+)`/g, (match) => color(ansi.blue, match));
-
-  const highlightPaths = (line) =>
-    line.replace(pathRegex, (match, prefix, pathPart) => {
-      return `${prefix}${color(ansi.magenta, pathPart)}`;
-    });
-
-  const formatLine = (line) => {
-    if (!enabled || line === "") return line;
-    const trimmed = line.trim();
-    if (trimmed === "--------") {
-      inHeader = !inHeader;
-      return color(ansi.gray, line);
-    }
-    if (inHeader) return color(ansi.gray, line);
-    if (trimmed.startsWith("```")) {
-      inCodeBlock = !inCodeBlock;
-      return color(ansi.gray, line);
-    }
-    if (inCodeBlock) return color(ansi.gray, line);
-
-    if (/^diff --|^index |^\+\+\+|^---/.test(trimmed)) {
-      inDiffHunk = false;
-      return color(ansi.magenta, line);
-    }
-    if (/^@@/.test(trimmed)) {
-      inDiffHunk = true;
-      return color(ansi.magenta, line);
-    }
-
-    const looksLikeList = /^[-+]\s+/.test(trimmed);
-    if (inDiffHunk && /^\+\s?/.test(trimmed) && !/^\+\+\+/.test(trimmed) && !looksLikeList) {
-      return color(ansi.green, line);
-    }
-    if (inDiffHunk && /^-\s?/.test(trimmed) && !/^---/.test(trimmed) && !looksLikeList) {
-      return color(ansi.red, line);
-    }
-    if (/^-\s+\[[xX]\]/.test(trimmed)) return color(ansi.green, line);
-    if (/^-\s+\[~\]/.test(trimmed)) return color(ansi.yellow, line);
-    if (/^-\s+\[\s\]/.test(trimmed)) return color(ansi.gray, line);
-
-    if (/\b(error|failed|exception|traceback|fatal)\b/i.test(trimmed)) {
-      return color(ansi.red, line);
-    }
-    if (/\b(warn|warning|deprecated)\b/i.test(trimmed)) {
-      return color(ansi.yellow, line);
-    }
-    if (/\b(success|succeeded|done|complete|completed)\b/i.test(trimmed)) {
-      return color(ansi.green, line);
-    }
-    if (/^#{1,6}\s+/.test(trimmed)) return color(ansi.cyan, line);
-    if (trimmed.endsWith("?")) return color(ansi.yellow, line);
-    if (/^\$\s+/.test(trimmed) || /^>\s+/.test(trimmed)) {
-      return color(ansi.blue, line);
-    }
-
-    let styled = highlightInline(line);
-    if (!styled.includes("`")) {
-      styled = highlightPaths(styled);
-    }
-    if (trimmed.length >= 140) return color(ansi.dim, styled);
-    return styled;
-  };
-
-  return { formatLine };
-}
-
-async function runCodex(prompt) {
+async function runCodex(prompt, spinnerText) {
   fs.writeFileSync(promptPath, prompt, "utf8");
   const args = ["exec"];
 
@@ -774,7 +696,7 @@ async function runCodex(prompt) {
     ];
   }
 
-  const stopSpinner = startSpinner("Generating plan...");
+  const spinner = createSpinner(spinnerText || "Generating plan...");
   return new Promise((resolve) => {
     const styler = createLogStyler();
     const child = spawn(command, commandArgs, {
@@ -791,12 +713,12 @@ async function runCodex(prompt) {
       stderr += data.toString();
     });
     child.on("error", (error) => {
-      stopSpinner();
+      spinner.stop();
       console.error(error?.message || error);
       process.exit(1);
     });
     child.on("close", (code) => {
-      stopSpinner();
+      spinner.stop();
       const combined = `${stdout}\n${stderr}`;
       const lines = combined.split(/\r?\n/);
       for (const line of lines) {
@@ -935,11 +857,9 @@ async function selectSuccessCriteria(defaultCriteria, standardChoices) {
 
 async function confirmPlan(tasksFile) {
   const content = fs.readFileSync(tasksFile, "utf8");
-  const cyan = "\u001b[36m";
-  const reset = "\u001b[0m";
-  process.stdout.write(`\n${cyan}--- Proposed tasks.md ---\n\n`);
+  process.stdout.write(`\n${colors.cyan("--- Proposed tasks.md ---")}\n\n`);
   process.stdout.write(content);
-  process.stdout.write(`\n--- End tasks.md ---${reset}\n\n`);
+  process.stdout.write(`\n${colors.cyan("--- End tasks.md ---")}\n\n`);
   const confirm = new Confirm({
     name: "confirm",
     message: "Approve this plan?",
@@ -1055,7 +975,7 @@ async function main() {
     .join("\n");
   const promptBase = buildPrompt(successCriteria);
 
-  const first = await runCodex(promptBase);
+  const first = await runCodex(promptBase, "Generating plan...");
   const questions = extractQuestions(first.output);
 
   if (questions.length > 0) {
@@ -1067,7 +987,7 @@ async function main() {
 
     process.stdout.write("\nRunning plan with your answers...\n\n");
     const promptWithAnswers = `${promptBase}\nAnswers:\n${answers}\n`;
-    await runCodex(promptWithAnswers);
+    await runCodex(promptWithAnswers, "Generating plan with answers...");
     enrichRequiredTools(tasksFile);
   } else {
     enrichRequiredTools(tasksFile);
@@ -1091,7 +1011,7 @@ async function main() {
 
     process.stdout.write("\nUpdating plan with your feedback...\n\n");
     const revisionPrompt = `${promptBase}\nRevision feedback:\n${feedback}\n`;
-    await runCodex(revisionPrompt);
+    await runCodex(revisionPrompt, "Updating plan...");
     enrichRequiredTools(tasksFile);
 
     if (!fs.existsSync(tasksFile)) {

@@ -3,12 +3,42 @@
 const path = require("path");
 const { spawnSync } = require("child_process");
 
+function getColors() {
+  try {
+    const ui = require(path.join(__dirname, "..", "src", "ui", "terminal"));
+    return ui?.colors || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+const colors = getColors() || {
+  cyan: (text) => text,
+  yellow: (text) => text,
+  green: (text) => text,
+  gray: (text) => text,
+};
+
 const argv = process.argv.slice(2);
 const cmd = argv[0];
 const args = argv.slice(1);
 
 const showHelp = () => {
-  process.stdout.write(`\nralph-codex <command> [options]\n\nCommands:\n  init        Create ralph.config.yml and update .gitignore\n  plan        Generate tasks.md with a single round of questions\n  run         Execute the loop until completion\n  reset       Reset all tasks in tasks.md to [ ]\n  docker      Pick a Docker base image via Codex and update config\n\nExamples:\n  ralph-codex init\n  ralph-codex plan "Add screenshot flow"\n  ralph-codex run --max-iterations 15\n  ralph-codex reset\n\n`);
+  process.stdout.write(
+    `\n${colors.cyan("ralph-codex <command> [options]")}\n\n` +
+      `${colors.yellow("Commands:")}\n` +
+      `  ${colors.green("init")}        Create ralph.config.yml and update .gitignore\n` +
+      `  ${colors.green("plan")}        Generate tasks.md with a single round of questions\n` +
+      `  ${colors.green("run")}         Execute the loop until completion\n` +
+      `  ${colors.green("reset")}       Reset all tasks in tasks.md to [ ]\n` +
+      `  ${colors.green("docker")}      Pick a Docker base image via Codex and update config\n\n` +
+      `${colors.yellow("Examples:")}\n` +
+      `  ralph-codex init\n` +
+      `  ralph-codex plan "Add screenshot flow"\n` +
+      `  ralph-codex run --max-iterations 15\n` +
+      `  ralph-codex reset\n\n` +
+      `${colors.gray('Tip: run "ralph-codex <command> --help" for command options.')}\n\n`
+  );
 };
 
 if (!cmd || cmd === "help" || cmd === "-h" || cmd === "--help") {
