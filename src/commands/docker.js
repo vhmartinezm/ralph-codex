@@ -1,8 +1,10 @@
-const { spawnSync } = require("child_process");
-const fs = require("fs");
-const path = require("path");
-const { Confirm } = require("enquirer");
-const yaml = require("js-yaml");
+import { spawnSync } from "child_process";
+import fs from "fs";
+import path from "path";
+import enquirer from "enquirer";
+import yaml from "js-yaml";
+
+const { Confirm } = enquirer;
 
 const root = process.cwd();
 const defaultConfigPath = path.join(root, "ralph.config.yml");

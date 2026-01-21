@@ -1,10 +1,12 @@
-const { spawn, spawnSync } = require("child_process");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const yaml = require("js-yaml");
-const { Confirm, Select } = require("enquirer");
-const { colors, createLogStyler, createProgressBar } = require("../ui/terminal");
+import { spawn, spawnSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import yaml from "js-yaml";
+import enquirer from "enquirer";
+import { colors, createLogStyler, createProgressBar } from "../ui/terminal.js";
+
+const { Confirm, Select } = enquirer;
 
 const root = process.cwd();
 const agentDir = path.join(root, ".ralph");

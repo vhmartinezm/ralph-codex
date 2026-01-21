@@ -1,6 +1,6 @@
-const pc = require("picocolors");
-const ora = require("ora");
-const cliProgress = require("cli-progress");
+import pc from "picocolors";
+import ora from "ora";
+import cliProgress from "cli-progress";
 
 const isTty = Boolean(process.stdout.isTTY);
 const colorEnabled = isTty && !process.env.NO_COLOR;
@@ -128,7 +128,7 @@ function createLogStyler() {
   return { formatLine };
 }
 
-module.exports = {
+export {
   colors,
   colorEnabled,
   createSpinner,

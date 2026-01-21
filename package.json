@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Codex-first Ralph-style planning and run loops",
   "license": "MIT",
-  "type": "commonjs",
+  "type": "module",
   "bin": {
     "ralph-codex": "bin/ralph-codex.js"
   },

@@ -1,6 +1,9 @@
-const fs = require("fs");
-const path = require("path");
-const { Confirm, Input, Select } = require("enquirer");
+import fs from "fs";
+import path from "path";
+import enquirer from "enquirer";
+import { fileURLToPath } from "url";
+
+const { Confirm, Input, Select } = enquirer;
 
 const root = process.cwd();
 const argv = process.argv.slice(2);
@@ -26,6 +29,7 @@ for (let i = 0; i < argv.length; i += 1) {
   }
 }
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templatePath = path.join(__dirname, "..", "..", "templates", "ralph.config.yml");
 const targetPath = configPath
   ? path.resolve(root, configPath)

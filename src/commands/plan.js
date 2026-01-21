@@ -1,10 +1,12 @@
-const { spawn, spawnSync } = require("child_process");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { Confirm, Editor, Input, MultiSelect, Select } = require("enquirer");
-const yaml = require("js-yaml");
-const { colors, createLogStyler, createSpinner } = require("../ui/terminal");
+import { spawn, spawnSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import enquirer from "enquirer";
+import yaml from "js-yaml";
+import { colors, createLogStyler, createSpinner } from "../ui/terminal.js";
+
+const { Confirm, Editor, Input, MultiSelect, Select } = enquirer;
 
 const root = process.cwd();
 const agentDir = path.join(root, ".ralph");
@@ -834,7 +836,7 @@ async function selectSuccessCriteria(defaultCriteria, standardChoices) {
   selected = selected.filter((item) => item !== customChoice);
 
   if (wantsCustom) {
-    const input = await new (require("enquirer").Input)({
+    const input = await new Input({
       name: "custom",
       message:
         "Enter custom commands (comma-separated), e.g. make test, pytest, go test ./...:",

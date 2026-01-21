@@ -1,7 +1,7 @@
-const fs = require("fs");
-const path = require("path");
-const yaml = require("js-yaml");
-const { colors } = require("../ui/terminal");
+import fs from "fs";
+import path from "path";
+import yaml from "js-yaml";
+import { colors } from "../ui/terminal.js";
 
 const root = process.cwd();
 const argv = process.argv.slice(2);

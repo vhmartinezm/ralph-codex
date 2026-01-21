@@ -1,23 +1,13 @@
 #!/usr/bin/env node
 
-const path = require("path");
-const { spawnSync } = require("child_process");
+import path from "path";
+import { spawnSync } from "child_process";
+import { fileURLToPath } from "url";
+import { createRequire } from "module";
+import { colors } from "../src/ui/terminal.js";
 
-function getColors() {
-  try {
-    const ui = require(path.join(__dirname, "..", "src", "ui", "terminal"));
-    return ui?.colors || null;
-  } catch (_) {
-    return null;
-  }
-}
-
-const colors = getColors() || {
-  cyan: (text) => text,
-  yellow: (text) => text,
-  green: (text) => text,
-  gray: (text) => text,
-};
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
