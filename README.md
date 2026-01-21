@@ -79,6 +79,8 @@ Useful options:
 
 - `--input <path>` read tasks from a custom file (alias of `--tasks`).
 - `--quiet` reduce output.
+- `--max-iteration-seconds <n>` soft per-iteration limit (stop after current loop).
+- `--max-total-seconds <n>` hard total limit (kills in-flight loop).
 - `--completion-promise <text>` change the completion marker.
 - `--stop-on-error` stop on the first error.
 - `--no-tail` disable log/scratchpad tailing.
@@ -151,6 +153,8 @@ plan:
 
 run:
   max_iterations: 15
+  max_iteration_seconds: null
+  max_total_seconds: null
 ```
 
 Codex settings quick guide:

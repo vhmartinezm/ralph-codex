@@ -347,6 +347,8 @@ function getConfigRows(config) {
     run: {
       tasks_path: "tasks.md",
       max_iterations: 15,
+      max_iteration_seconds: null,
+      max_total_seconds: null,
       tail_log: true,
       tail_scratchpad: false,
     },

@@ -14,6 +14,8 @@ const repoName = path.basename(root);
 
 const argv = process.argv.slice(2);
 let maxIterations = 15;
+let maxIterationSeconds = null;
+let maxTotalSeconds = null;
 let quiet = false;
 let tasksPath = "tasks.md";
 let noSandbox = false;
@@ -40,6 +42,22 @@ for (let i = 0; i < argv.length; i += 1) {
   }
   if (arg === "--max-iterations") {
     maxIterations = Number(argv[i + 1] || 0) || maxIterations;
+    i += 1;
+    continue;
+  }
+  if (arg === "--max-iteration-seconds") {
+    const value = Number(argv[i + 1] || 0);
+    if (Number.isFinite(value) && value > 0) {
+      maxIterationSeconds = value;
+    }
+    i += 1;
+    continue;
+  }
+  if (arg === "--max-total-seconds") {
+    const value = Number(argv[i + 1] || 0);
+    if (Number.isFinite(value) && value > 0) {
+      maxTotalSeconds = value;
+    }
     i += 1;
     continue;
   }
@@ -135,6 +153,8 @@ function printHelp() {
       `  ${colors.green("--input <path>")}                  Read tasks from a custom file (alias of --tasks)\n` +
       `  ${colors.green("--tasks <path>")}                  Read tasks from a custom file (default: tasks.md)\n` +
       `  ${colors.green("--max-iterations <n>")}            Max iterations (default: 15)\n` +
+      `  ${colors.green("--max-iteration-seconds <n>")}     Soft limit per iteration (stop after current loop)\n` +
+      `  ${colors.green("--max-total-seconds <n>")}         Hard limit for the whole run (kills in-flight loop)\n` +
       `  ${colors.green("--quiet, -q")}                     Reduce output\n` +
       `  ${colors.green("--completion-promise <text>")}     Completion token (default: LOOP_COMPLETE)\n` +
       `  ${colors.green("--stop-on-error")}                 Stop on first error\n` +
@@ -494,6 +514,18 @@ if (tasksPath === "tasks.md" && runConfig.tasks_path) {
 if (maxIterations === 15 && runConfig.max_iterations) {
   maxIterations = runConfig.max_iterations;
 }
+if (maxIterationSeconds === null && runConfig.max_iteration_seconds) {
+  const value = Number(runConfig.max_iteration_seconds);
+  if (Number.isFinite(value) && value > 0) {
+    maxIterationSeconds = value;
+  }
+}
+if (maxTotalSeconds === null && runConfig.max_total_seconds) {
+  const value = Number(runConfig.max_total_seconds);
+  if (Number.isFinite(value) && value > 0) {
+    maxTotalSeconds = value;
+  }
+}
 if (completionPromise === "LOOP_COMPLETE" && runConfig.completion_promise) {
   completionPromise = runConfig.completion_promise;
 }
@@ -795,6 +827,11 @@ function writeSummary(summaryPath, data) {
     data.latest.blockers.forEach((item) => lines.push(`- ${item}`));
     lines.push(``);
   }
+  if (data.notes?.length) {
+    lines.push(`## Notes`);
+    data.notes.forEach((note) => lines.push(`- ${note}`));
+    lines.push(``);
+  }
   fs.writeFileSync(summaryPath, lines.join("\n"), "utf8");
 }
 
@@ -820,7 +857,7 @@ function readNewScratchpadChunk() {
   }
 }
 
-function runCodex(prompt) {
+function runCodex(prompt, options = {}) {
   return new Promise((resolve) => {
     const args = ["exec"];
     if (model) args.push("--model", model);
@@ -863,6 +900,33 @@ function runCodex(prompt) {
     const styler = createLogStyler();
     let output = "";
     let lineBuffer = "";
+    let hardTimedOut = false;
+    const hardTimeoutMs = Number.isFinite(options.hardTimeoutMs)
+      ? options.hardTimeoutMs
+      : null;
+    let hardTimeoutId = null;
+    let killTimer = null;
+
+    const killChild = () => {
+      if (child.killed) return;
+      try {
+        child.kill("SIGTERM");
+      } catch (_) {}
+      killTimer = setTimeout(() => {
+        if (!child.killed) {
+          try {
+            child.kill("SIGKILL");
+          } catch (_) {}
+        }
+      }, 4000);
+    };
+
+    if (hardTimeoutMs && hardTimeoutMs > 0) {
+      hardTimeoutId = setTimeout(() => {
+        hardTimedOut = true;
+        killChild();
+      }, hardTimeoutMs);
+    }
 
     const writeWithColor = (text, isStderr = false) => {
       if (isStderr) {
@@ -892,6 +956,11 @@ function runCodex(prompt) {
       flushLines(text, true);
     });
 
+    const cleanupTimers = () => {
+      if (hardTimeoutId) clearTimeout(hardTimeoutId);
+      if (killTimer) clearTimeout(killTimer);
+    };
+
     if (streamLog || streamScratchpad) {
       const interval = setInterval(() => {
         if (streamLog) readNewLogChunk();
@@ -899,19 +968,21 @@ function runCodex(prompt) {
       }, 500);
       child.on("close", (code) => {
         clearInterval(interval);
+        cleanupTimers();
         if (streamLog) readNewLogChunk();
         if (streamScratchpad) readNewScratchpadChunk();
         if (lineBuffer) {
           flushLines("\n");
         }
-        resolve({ code: code ?? 0, output });
+        resolve({ code: code ?? 0, output, timedOut: hardTimedOut });
       });
     } else {
       child.on("close", (code) => {
+        cleanupTimers();
         if (lineBuffer) {
           flushLines("\n");
         }
-        resolve({ code: code ?? 0, output });
+        resolve({ code: code ?? 0, output, timedOut: hardTimedOut });
       });
     }
 
@@ -981,8 +1052,29 @@ async function main() {
     return true;
   };
 
+  const notes = [];
+  const startTimeMs = Date.now();
+  const iterationBudgetMs = Number.isFinite(maxIterationSeconds)
+    ? Math.round(maxIterationSeconds * 1000)
+    : null;
+  const totalBudgetMs = Number.isFinite(maxTotalSeconds)
+    ? Math.round(maxTotalSeconds * 1000)
+    : null;
+  let iterationTimeLimitHit = false;
+  let totalTimeLimitHit = false;
   let iterationsUsed = 0;
   for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    if (totalBudgetMs) {
+      const elapsed = Date.now() - startTimeMs;
+      const remaining = totalBudgetMs - elapsed;
+      if (remaining <= 0) {
+        totalTimeLimitHit = true;
+        notes.push(
+          `Total time limit exceeded before iteration ${iteration} (limit: ${maxTotalSeconds}s).`,
+        );
+        break;
+      }
+    }
     iterationsUsed = iteration;
     const prompt = `${promptBase}\nIteration: ${iteration} of ${maxIterations}\n`;
     const progress = getTaskProgress(tasksFile);
@@ -1008,7 +1100,21 @@ async function main() {
     } else {
       process.stdout.write("\n");
     }
-    const result = await runCodex(prompt);
+    let iterationTimeoutId = null;
+    let iterationTimedOut = false;
+    if (iterationBudgetMs && iterationBudgetMs > 0) {
+      iterationTimeoutId = setTimeout(() => {
+        iterationTimedOut = true;
+      }, iterationBudgetMs);
+    }
+
+    const totalRemainingMs = totalBudgetMs
+      ? Math.max(0, totalBudgetMs - (Date.now() - startTimeMs))
+      : null;
+    const result = await runCodex(prompt, {
+      hardTimeoutMs: totalRemainingMs,
+    });
+    if (iterationTimeoutId) clearTimeout(iterationTimeoutId);
     lastOutput = result.output;
 
     if (
@@ -1020,8 +1126,28 @@ async function main() {
       break;
     }
 
+    if (result.timedOut) {
+      totalTimeLimitHit = true;
+      notes.push(
+        `Total time limit exceeded during iteration ${iteration} (limit: ${maxTotalSeconds}s).`,
+      );
+      lastStatus = result.code ?? 1;
+      break;
+    }
+
+    if (iterationTimedOut) {
+      notes.push(
+        `Iteration ${iteration} exceeded time limit (limit: ${maxIterationSeconds}s).`,
+      );
+    }
+
     if (hasCompletion(result.output)) {
       completed = true;
+      break;
+    }
+
+    if (iterationTimedOut) {
+      iterationTimeLimitHit = true;
       break;
     }
 
@@ -1037,12 +1163,17 @@ async function main() {
     ? fs.readFileSync(logPath, "utf8")
     : "";
   const latest = logContent ? extractLatestIteration(logContent) : null;
-  const summaryStatus = completed ? "completed" : "incomplete";
+  const summaryStatus = completed
+    ? "completed"
+    : totalTimeLimitHit || iterationTimeLimitHit
+      ? "timeout"
+      : "incomplete";
   writeSummary(scratchpadPath, {
     status: summaryStatus,
     iterations: iterationsSummary,
     progress,
     latest,
+    notes,
   });
 
   if (!quiet && fs.existsSync(logPath)) {
@@ -1072,10 +1203,16 @@ async function main() {
     process.exit(1);
   }
 
-  const reason =
+  let reason =
     lastStatus !== 0 && stopOnError
       ? `Stopped on error (exit code ${lastStatus}).`
       : "Max iterations reached without completion.";
+  if (iterationTimeLimitHit) {
+    reason = `Iteration time limit exceeded (limit: ${maxIterationSeconds}s).`;
+  }
+  if (totalTimeLimitHit) {
+    reason = `Total time limit exceeded (limit: ${maxTotalSeconds}s).`;
+  }
 
   const hint = "Review .ralph/loop-log.md for blockers and decide next steps.";
 

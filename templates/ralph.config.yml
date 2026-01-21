@@ -45,6 +45,8 @@ plan:
 run:
   tasks_path: tasks.md
   max_iterations: 15
+  max_iteration_seconds: null # soft limit per iteration
+  max_total_seconds: null # hard limit for the full run
   completion_promise: LOOP_COMPLETE
   tail_log: true
   tail_scratchpad: false
