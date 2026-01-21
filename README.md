@@ -29,6 +29,7 @@ npx ralph-codex --help
 ralph-codex init
 ralph-codex plan "Add screenshot flow for /demo" --output tasks.md
 ralph-codex run
+ralph-codex view
 ralph-codex reset
 ```
 
@@ -82,6 +83,29 @@ Useful options:
 - `--stop-on-error` stop on the first error.
 - `--no-tail` disable log/scratchpad tailing.
 - `--reasoning [effort]` override reasoning effort; omit value to pick from a list (defaults to medium).
+
+### view
+
+Show tasks, success criteria, and config summaries.
+
+```bash
+ralph-codex view [section] [--format table|list|json]
+```
+
+Sections:
+
+- `tasks` shows task status counts and list.
+- `criteria` shows the success criteria list.
+- `config` shows effective config values.
+
+Useful options:
+
+- `--tasks <path>` point to a custom tasks file.
+- `--config <path>` use a custom config file.
+- `--format <format>` table | list | json (default: table).
+- `--only <filter>` pending | blocked | done (tasks only).
+- `--limit <n>` limit task rows (0 = no limit).
+- `--watch`, `-w` watch for changes and refresh the view.
 
 ### reset
 
