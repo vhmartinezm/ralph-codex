@@ -6,7 +6,7 @@ import yaml from "js-yaml";
 import enquirer from "enquirer";
 import { colors, createLogStyler, createProgressBar } from "../ui/terminal.js";
 
-const { Confirm, Select } = enquirer;
+const { AutoComplete, Confirm } = enquirer;
 
 const root = process.cwd();
 const agentDir = path.join(root, ".ralph");
@@ -149,8 +149,8 @@ function printHelp() {
       `  ${colors.green("--no-sandbox")}                    Use danger-full-access\n` +
       `  ${colors.green("--ask-for-approval <mode>")}       untrusted | on-failure | on-request | never\n` +
       `  ${colors.green("--full-auto")}                     workspace-write + on-request\n` +
-      `  ${colors.green("--reasoning [effort]")}            low | medium | high | extra-high (omit to pick)\n` +
-      `  ${colors.green("-h, --help")}                      Show help\n\n`
+      `  ${colors.green("--reasoning [effort]")}            low | medium | high | xhigh (omit to pick)\n` +
+      `  ${colors.green("-h, --help")}                      Show help\n\n`,
   );
 }
 
@@ -167,7 +167,7 @@ function loadConfig(configFilePath) {
     return yaml.load(content) || {};
   } catch (error) {
     console.error(
-      `Failed to read config at ${configFilePath}: ${error?.message || error}`
+      `Failed to read config at ${configFilePath}: ${error?.message || error}`,
     );
     process.exit(1);
   }
@@ -179,27 +179,55 @@ function normalizeReasoningEffort(value) {
   if (!trimmed) return null;
   const lowered = trimmed.toLowerCase();
   if (["null", "unset", "none", "default"].includes(lowered)) return null;
+  if (lowered === "extra-high" || lowered === "extra_high") return "xhigh";
+  if (["low", "medium", "high", "xhigh"].includes(lowered)) return lowered;
   return trimmed;
 }
 
 async function promptReasoningEffort(currentValue) {
   const choices = [
-    { name: "unset", message: "unset (null; use Codex default)", value: null },
-    { name: "low", message: "low", value: "low" },
-    { name: "medium", message: "medium", value: "medium" },
-    { name: "high", message: "high", value: "high" },
-    { name: "extra-high", message: "extra-high", value: "extra-high" },
+    {
+      name: "unset",
+      message: "unset (null)",
+      value: null,
+      hint: "Use the Codex default",
+    },
+    {
+      name: "low",
+      message: "low",
+      value: "low",
+      hint: "Faster, less thorough reasoning.",
+    },
+    {
+      name: "medium",
+      message: "medium",
+      value: "medium",
+      hint: "Default balance of speed + depth.",
+    },
+    {
+      name: "high",
+      message: "high",
+      value: "high",
+      hint: "Deeper reasoning, slower.",
+    },
+    {
+      name: "xhigh",
+      message: "xhigh",
+      value: "xhigh",
+      hint: "Maximum depth, slowest.",
+    },
   ];
   const normalized = normalizeReasoningEffort(currentValue) || "medium";
   const initial = Math.max(
     0,
     choices.findIndex((choice) => choice.value === normalized)
   );
-  const prompt = new Select({
+  const prompt = new AutoComplete({
     name: "reasoning",
     message: "Select model reasoning effort:",
     choices,
     initial,
+    limit: Math.min(choices.length, 7),
   });
   return prompt.run();
 }
@@ -261,7 +289,7 @@ function ensureDockerImage(dockerConfig) {
   const dockerfilePath = path.join(root, dockerConfig.dockerfile);
   if (!fs.existsSync(dockerfilePath)) {
     console.error(
-      `Missing ${dockerConfig.dockerfile}. Run ralph:plan to generate it.`
+      `Missing ${dockerConfig.dockerfile}. Run ralph:plan to generate it.`,
     );
     process.exit(1);
   }
@@ -291,7 +319,7 @@ function ensureDockerImage(dockerConfig) {
 
     if (!dockerConfig.autoFix || attempt >= dockerConfig.fixAttempts) {
       console.error(
-        `Docker build failed. See ${dockerConfig.fixLog} for details.`
+        `Docker build failed. See ${dockerConfig.fixLog} for details.`,
       );
       process.exit(result.status ?? 1);
     }
@@ -314,7 +342,7 @@ Constraints:
     process.stdout.write(
       `\nAttempting Dockerfile auto-fix (${attempt + 1}/${
         dockerConfig.fixAttempts
-      })...\n`
+      })...\n`,
     );
 
     if (!dockerConfig.fixUseHost) {
@@ -340,7 +368,12 @@ function buildDockerRunArgs(dockerConfig) {
     dockerConfig.tty === "true" ||
     (dockerConfig.tty === "auto" && process.stdin.isTTY);
   if (wantsTty) args.push("-t");
-  args.push("-v", `${root}:${dockerConfig.workdir}`, "-w", dockerConfig.workdir);
+  args.push(
+    "-v",
+    `${root}:${dockerConfig.workdir}`,
+    "-w",
+    dockerConfig.workdir,
+  );
   const codexHome = path.isAbsolute(dockerConfig.codexHome)
     ? dockerConfig.codexHome
     : path.join(root, dockerConfig.codexHome);
@@ -366,13 +399,12 @@ function buildDockerRunArgs(dockerConfig) {
 
 function cleanupDockerImage(dockerConfig) {
   if (!dockerConfig.enabled) return;
-  if (dockerConfig.cleanup !== "image" && dockerConfig.cleanup !== "all") return;
+  if (dockerConfig.cleanup !== "image" && dockerConfig.cleanup !== "all")
+    return;
 
-  const result = spawnSync(
-    "docker",
-    ["rmi", "-f", dockerConfig.image],
-    { encoding: "utf8" }
-  );
+  const result = spawnSync("docker", ["rmi", "-f", dockerConfig.image], {
+    encoding: "utf8",
+  });
 
   if (result.status !== 0) {
     const message = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
@@ -425,7 +457,7 @@ function buildDockerImage(dockerConfig) {
   const result = spawnSync(
     "docker",
     ["build", "-f", dockerfilePath, "-t", dockerConfig.image, "."],
-    { cwd: root, encoding: "utf8" }
+    { cwd: root, encoding: "utf8" },
   );
   const output = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
   if (output) process.stdout.write(`${output}\n`);
@@ -441,9 +473,10 @@ activeDockerConfig = dockerConfig;
 const requiredCommands = Array.isArray(runConfig.required_commands)
   ? runConfig.required_commands.filter(Boolean)
   : [];
-const requiredCommandsSection = requiredCommands.length > 0
-  ? requiredCommands.map((cmd) => `- Run \`${cmd}\`.`).join("\n")
-  : "- None.";
+const requiredCommandsSection =
+  requiredCommands.length > 0
+    ? requiredCommands.map((cmd) => `- Run \`${cmd}\`.`).join("\n")
+    : "- None.";
 
 if (!model && codexConfig.model) model = codexConfig.model;
 if (!profile && codexConfig.profile) profile = codexConfig.profile;
@@ -471,23 +504,23 @@ if (typeof runConfig.tail_scratchpad === "boolean") {
   streamScratchpad = runConfig.tail_scratchpad;
 }
 
-  const tasksFile = path.join(root, tasksPath);
+const tasksFile = path.join(root, tasksPath);
 
-  if (!fs.existsSync(tasksFile)) {
-    console.error(`Missing ${tasksPath}. Run ralph:plan or create it first.`);
-    process.exit(1);
-  }
+if (!fs.existsSync(tasksFile)) {
+  console.error(`Missing ${tasksPath}. Run ralph:plan or create it first.`);
+  process.exit(1);
+}
 
-  if (activeDockerConfig?.enabled) {
-    const probe = spawnSync("docker", ["info"], { encoding: "utf8" });
-    if (probe.status !== 0) {
-      const msg =
-        `${probe.stdout || ""}\n${probe.stderr || ""}`.trim() ||
-        "Docker is not running. Start Docker Desktop or Colima and retry.";
-      process.stderr.write(`\n${colors.red(msg)}\n`);
-      process.exit(probe.status ?? 1);
-    }
+if (activeDockerConfig?.enabled) {
+  const probe = spawnSync("docker", ["info"], { encoding: "utf8" });
+  if (probe.status !== 0) {
+    const msg =
+      `${probe.stdout || ""}\n${probe.stderr || ""}`.trim() ||
+      "Docker is not running. Start Docker Desktop or Colima and retry.";
+    process.stderr.write(`\n${colors.red(msg)}\n`);
+    process.exit(probe.status ?? 1);
   }
+}
 
 fs.mkdirSync(agentDir, { recursive: true });
 
@@ -531,10 +564,7 @@ Process:
 4) If a task is not started, leave it blank \`[ ]\`.
 5) If needed, start the app or run tests. Prefer local-only bind:
    set \`HOST=127.0.0.1\` and \`PORT=3000\` (or project defaults) when launching a dev server.
-6) Append a new section to ${path.relative(
-    root,
-    logPath
-  )} with:
+6) Append a new section to ${path.relative(root, logPath)} with:
    - Iteration number
    - Changes made
    - Commands run + results
@@ -619,7 +649,7 @@ function validateTasksFile(tasksFilePath) {
   }
   if (invalidTasks > 0) {
     warnings.push(
-      `Found ${invalidTasks} task(s) with invalid status. Use [ ], [x], or [~].`
+      `Found ${invalidTasks} task(s) with invalid status. Use [ ], [x], or [~].`,
     );
   }
 
@@ -635,7 +665,7 @@ function validateTasksFile(tasksFilePath) {
       if (line.toLowerCase().startsWith("success criteria")) continue;
     }
     if (successItems === 0) {
-      warnings.push('Success criteria section has no list items.');
+      warnings.push("Success criteria section has no list items.");
     }
   }
 
@@ -690,11 +720,11 @@ function printDockerStorageHint(output) {
       `- Check disk space\n` +
       `- Docker Desktop -> Troubleshoot -> Clean/Purge data\n` +
       `- Reinstall Docker or switch to Colima\n` +
-      `- Temporary bypass: set docker.enabled=false in ralph.config.yml\n`
+      `- Temporary bypass: set docker.enabled=false in ralph.config.yml\n`,
   );
   if (output) {
     process.stderr.write(
-      `${colors.yellow("Raw error (truncated):")} ${truncate(output, 240)}\n`
+      `${colors.yellow("Raw error (truncated):")} ${truncate(output, 240)}\n`,
     );
   }
 }
@@ -741,7 +771,9 @@ function writeSummary(summaryPath, data) {
   lines.push(``);
   lines.push(`- Status: ${data.status}`);
   lines.push(`- Iterations: ${data.iterations}`);
-  lines.push(`- Progress: ${data.progress.completed}/${data.progress.total} (${data.progress.percent}%)`);
+  lines.push(
+    `- Progress: ${data.progress.completed}/${data.progress.total} (${data.progress.percent}%)`,
+  );
   lines.push(``);
   if (data.latest?.title) {
     lines.push(`## Latest iteration`);
@@ -784,9 +816,7 @@ function readNewScratchpadChunk() {
   const log = fs.readFileSync(scratchpadPath, "utf8").slice(lastScratchpadSize);
   lastScratchpadSize = stats.size;
   if (log.trim()) {
-    process.stdout.write(
-      `\n--- Ralph Scratchpad update ---\n\n${log}\n`
-    );
+    process.stdout.write(`\n--- Ralph Scratchpad update ---\n\n${log}\n`);
   }
 }
 
@@ -800,10 +830,7 @@ function runCodex(prompt) {
       args.push("--config", `ask_for_approval=${askForApproval}`);
     }
     if (modelReasoningEffort) {
-      args.push(
-        "--config",
-        `model_reasoning_effort=${modelReasoningEffort}`
-      );
+      args.push("--config", `model_reasoning_effort=${modelReasoningEffort}`);
     }
     if (resolvedSandbox) args.push("--sandbox", resolvedSandbox);
     args.push("-");
@@ -813,7 +840,7 @@ function runCodex(prompt) {
     if (activeDockerConfig?.enabled) {
       if (!activeDockerConfig.codexInstall) {
         console.error(
-          "docker.codex_install is required when docker.enabled is true."
+          "docker.codex_install is required when docker.enabled is true.",
         );
         process.exit(1);
       }
@@ -895,9 +922,7 @@ function runCodex(prompt) {
 
 async function main() {
   const hasCompletion = (output) =>
-    output
-      .split(/\r?\n/)
-      .some((line) => line.trim() === completionPromise);
+    output.split(/\r?\n/).some((line) => line.trim() === completionPromise);
 
   if (typeof reasoningChoice !== "undefined") {
     if (reasoningChoice === "__prompt__") {
@@ -914,7 +939,7 @@ async function main() {
   if (warnings.length > 0) {
     process.stdout.write(`\n${colors.yellow("Task file warnings:")}\n`);
     warnings.forEach((warning) =>
-      process.stdout.write(`${colors.yellow(`- ${warning}`)}\n`)
+      process.stdout.write(`${colors.yellow(`- ${warning}`)}\n`),
     );
     process.stdout.write("\n");
 
@@ -931,11 +956,14 @@ async function main() {
   }
 
   const initialProgress = getTaskProgress(tasksFile);
-  if (initialProgress.total > 0 && initialProgress.completed === initialProgress.total) {
+  if (
+    initialProgress.total > 0 &&
+    initialProgress.completed === initialProgress.total
+  ) {
     process.stdout.write(
       `\n${colors.green(
-        `All tasks are already completed (${initialProgress.completed}/${initialProgress.total}).`
-      )}\n`
+        `All tasks are already completed (${initialProgress.completed}/${initialProgress.total}).`,
+      )}\n`,
     );
     process.exit(0);
   }
@@ -963,19 +991,19 @@ async function main() {
     const bar = `[${"#".repeat(filled)}${"-".repeat(empty)}]`;
     const lastBlocker = getLastBlocker(logPath);
     process.stdout.write(
-      `\n${colors.blue(`=== Iteration ${iteration}/${maxIterations} ===`)}\n`
+      `\n${colors.blue(`=== Iteration ${iteration}/${maxIterations} ===`)}\n`,
     );
     if (!renderProgressBar(progress, iteration)) {
       process.stdout.write(
         `${colors.cyan(bar)} ` +
           `${colors.green(`✓ ${progress.completed}`)} ` +
           `${colors.yellow(`~ ${progress.blocked}`)} / ` +
-          `${progress.total} (${progress.percent}%)\n`
+          `${progress.total} (${progress.percent}%)\n`,
       );
     }
     if (lastBlocker) {
       process.stdout.write(
-        `${colors.yellow(`Last blocker: ${truncate(lastBlocker, 140)}`)}\n\n`
+        `${colors.yellow(`Last blocker: ${truncate(lastBlocker, 140)}`)}\n\n`,
       );
     } else {
       process.stdout.write("\n");
@@ -983,7 +1011,10 @@ async function main() {
     const result = await runCodex(prompt);
     lastOutput = result.output;
 
-    if (activeDockerConfig?.enabled && detectDockerStorageIssue(result.output)) {
+    if (
+      activeDockerConfig?.enabled &&
+      detectDockerStorageIssue(result.output)
+    ) {
       fatalDockerError = result.output;
       printDockerStorageHint(result.output);
       break;
@@ -1002,7 +1033,9 @@ async function main() {
 
   const progress = getTaskProgress(tasksFile);
   const iterationsSummary = `${iterationsUsed}/${maxIterations}`;
-  const logContent = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+  const logContent = fs.existsSync(logPath)
+    ? fs.readFileSync(logPath, "utf8")
+    : "";
   const latest = logContent ? extractLatestIteration(logContent) : null;
   const summaryStatus = completed ? "completed" : "incomplete";
   writeSummary(scratchpadPath, {
@@ -1016,7 +1049,7 @@ async function main() {
     const log = fs.readFileSync(logPath, "utf8");
     if (log.trim()) {
       process.stdout.write(
-        `\n--- Ralph Loop Log (${path.relative(root, logPath)}) ---\n\n`
+        `\n--- Ralph Loop Log (${path.relative(root, logPath)}) ---\n\n`,
       );
       process.stdout.write(log);
       process.stdout.write("\n");
@@ -1025,7 +1058,7 @@ async function main() {
 
   if (completed) {
     process.stdout.write(
-      `\n${colors.green("Ralph run complete: LOOP_COMPLETE detected.")}\n`
+      `\n${colors.green("Ralph run complete: LOOP_COMPLETE detected.")}\n`,
     );
     cleanupDockerImage(activeDockerConfig || { enabled: false });
     process.exit(0);
@@ -1033,7 +1066,7 @@ async function main() {
 
   if (fatalDockerError) {
     process.stderr.write(
-      `\n${colors.red("Ralph run failed: Docker storage error.")}\n`
+      `\n${colors.red("Ralph run failed: Docker storage error.")}\n`,
     );
     cleanupDockerImage(activeDockerConfig || { enabled: false });
     process.exit(1);
@@ -1044,8 +1077,7 @@ async function main() {
       ? `Stopped on error (exit code ${lastStatus}).`
       : "Max iterations reached without completion.";
 
-  const hint =
-    "Review .ralph/loop-log.md for blockers and decide next steps.";
+  const hint = "Review .ralph/loop-log.md for blockers and decide next steps.";
 
   process.stderr.write(`\n${colors.red(`Ralph run failed: ${reason}`)}\n`);
   process.stderr.write(`${colors.red(hint)}\n`);

@@ -3,7 +3,7 @@ import path from "path";
 import enquirer from "enquirer";
 import { fileURLToPath } from "url";
 
-const { Confirm, Input, Select } = enquirer;
+const { AutoComplete, Confirm, Input, Toggle } = enquirer;
 
 const root = process.cwd();
 const argv = process.argv.slice(2);
@@ -30,7 +30,13 @@ for (let i = 0; i < argv.length; i += 1) {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const templatePath = path.join(__dirname, "..", "..", "templates", "ralph.config.yml");
+const templatePath = path.join(
+  __dirname,
+  "..",
+  "..",
+  "templates",
+  "ralph.config.yml",
+);
 const targetPath = configPath
   ? path.resolve(root, configPath)
   : path.join(root, "ralph.config.yml");
@@ -105,37 +111,110 @@ async function promptOptionalInput(message) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-async function promptSelect(message, choices, initial = 0) {
-  const select = new Select({
+async function promptAutoComplete(message, choices, initial = 0, options = {}) {
+  const prompt = new AutoComplete({
     name: "choice",
     message,
     choices,
     initial,
+    limit: Math.min(choices.length, 12),
+    ...options,
   });
-  return select.run();
+  return prompt.run();
 }
 
 async function promptModelChoice() {
-  const models = [
-    { value: "gpt-5.2-codex", label: "gpt-5.2-codex (recommended)" },
-    { value: "gpt-5.1-codex-mini", label: "gpt-5.1-codex-mini (recommended)" },
-    { value: "gpt-5.1-codex-max", label: "gpt-5.1-codex-max" },
-    { value: "gpt-5.2", label: "gpt-5.2" },
-    { value: "gpt-5.1", label: "gpt-5.1" },
-    { value: "gpt-5.1-codex", label: "gpt-5.1-codex" },
-    { value: "gpt-5-codex", label: "gpt-5-codex" },
-    { value: "gpt-5-codex-mini", label: "gpt-5-codex-mini" },
-    { value: "gpt-5", label: "gpt-5" },
+  const choices = [
+    {
+      name: "unset",
+      message: "unset (null)",
+      value: null,
+      hint: "Use the Codex default",
+    },
+    {
+      name: "gpt-5.2-codex",
+      message: "gpt-5.2-codex",
+      value: "gpt-5.2-codex",
+      hint: "Recommended: most advanced agentic coding model.",
+    },
+    {
+      name: "gpt-5.1-codex-mini",
+      message: "gpt-5.1-codex-mini",
+      value: "gpt-5.1-codex-mini",
+      hint: "Recommended: smaller, cost-effective GPT-5.1-Codex.",
+    },
+    {
+      name: "gpt-5.1-codex-max",
+      message: "gpt-5.1-codex-max",
+      value: "gpt-5.1-codex-max",
+      hint: "Optimized for long-horizon, agentic coding tasks.",
+    },
+    {
+      name: "gpt-5.2",
+      message: "gpt-5.2",
+      value: "gpt-5.2",
+      hint: "Best general agentic model across domains.",
+    },
+    {
+      name: "gpt-5.1",
+      message: "gpt-5.1",
+      value: "gpt-5.1",
+      hint: "Strong general coding model (succeeded by GPT-5.2).",
+    },
+    {
+      name: "gpt-5.1-codex",
+      message: "gpt-5.1-codex",
+      value: "gpt-5.1-codex",
+      hint: "Long-running agentic coding (succeeded by GPT-5.1-Codex-Max).",
+    },
+    {
+      name: "gpt-5-codex",
+      message: "gpt-5-codex",
+      value: "gpt-5-codex",
+      hint: "Tuned for long-running agentic coding (succeeded by GPT-5.1-Codex).",
+    },
+    {
+      name: "gpt-5-codex-mini",
+      message: "gpt-5-codex-mini",
+      value: "gpt-5-codex-mini",
+      hint: "Smaller GPT-5-Codex (succeeded by GPT-5.1-Codex-Mini).",
+    },
+    {
+      name: "gpt-5",
+      message: "gpt-5",
+      value: "gpt-5",
+      hint: "Reasoning model for coding (succeeded by GPT-5.1).",
+    },
+    {
+      name: "custom",
+      message: "custom (enter manually)",
+      value: "__custom__",
+      hint: "Enter any other model string.",
+    },
   ];
-  const choice = await promptSelect("Select a Codex model:", [
-    { name: "unset", message: "unset (null)", value: null },
-    ...models.map((model) => ({
-      name: model.value,
-      message: model.label,
-      value: model.value,
-    })),
-    { name: "custom", message: "custom (enter manually)", value: "__custom__" },
-  ]);
+  const choice = await promptAutoComplete(
+    "Select a Codex model (type to filter; choose custom for other models):",
+    choices,
+    0,
+    {
+      suggest: (input, list) => {
+        const term = String(input || "").toLowerCase();
+        if (!term) return list;
+        const matches = list.filter((item) => {
+          const label = String(
+            item?.message || item?.name || item?.value || ""
+          ).toLowerCase();
+          return label.includes(term);
+        });
+        for (const item of list) {
+          if (item?.name === "unset" || item?.name === "custom") {
+            if (!matches.includes(item)) matches.push(item);
+          }
+        }
+        return matches;
+      },
+    }
+  );
 
   if (choice === "__custom__") {
     return promptOptionalInput("Custom model name (leave blank for null)");
@@ -147,39 +226,111 @@ async function promptModelChoice() {
 async function collectCodexConfig() {
   const model = await promptModelChoice();
   const profile = await promptOptionalInput(
-    "Codex CLI profile (optional; leave blank to use Codex default)"
+    "Codex CLI profile (optional; leave blank to use Codex default)",
   );
-  const fullAuto = await new Confirm({
+  const fullAuto = await new Toggle({
     name: "full_auto",
-    message: "Enable full_auto? (quick setup: workspace-write + on-request)",
+    message: "Enable full_auto? (workspace-write + on-request)",
+    enabled: "Yes",
+    disabled: "No",
     initial: false,
   }).run();
 
-  const sandbox = await promptSelect("Sandbox mode:", [
-    { name: "unset", message: "unset (null; use Codex default)", value: null },
-    { name: "read-only", message: "read-only (safest)", value: "read-only" },
-    { name: "workspace-write", message: "workspace-write (recommended)", value: "workspace-write" },
-    { name: "danger-full-access", message: "danger-full-access (no guardrails)", value: "danger-full-access" },
+  const sandbox = await promptAutoComplete("Sandbox mode:", [
+    {
+      name: "unset",
+      message: "unset (null)",
+      value: null,
+      hint: "Use the Codex default",
+    },
+    {
+      name: "read-only",
+      message: "read-only",
+      value: "read-only",
+      hint: "Safest; no writes allowed.",
+    },
+    {
+      name: "workspace-write",
+      message: "workspace-write",
+      value: "workspace-write",
+      hint: "Recommended; allow repo writes only.",
+    },
+    {
+      name: "danger-full-access",
+      message: "danger-full-access",
+      value: "danger-full-access",
+      hint: "No guardrails; full system access.",
+    },
   ]);
 
-  const askForApproval = await promptSelect("Approval policy:", [
-    { name: "unset", message: "unset (null; use Codex default)", value: null },
-    { name: "untrusted", message: "untrusted (prompt often)", value: "untrusted" },
-    { name: "on-failure", message: "on-failure (prompt on errors)", value: "on-failure" },
-    { name: "on-request", message: "on-request (prompt for risky ops)", value: "on-request" },
-    { name: "never", message: "never (no prompts)", value: "never" },
+  const askForApproval = await promptAutoComplete("Approval policy:", [
+    {
+      name: "unset",
+      message: "unset (null)",
+      value: null,
+      hint: "Use the Codex default",
+    },
+    {
+      name: "untrusted",
+      message: "untrusted",
+      value: "untrusted",
+      hint: "Prompt often for approvals.",
+    },
+    {
+      name: "on-failure",
+      message: "on-failure",
+      value: "on-failure",
+      hint: "Prompt only on errors.",
+    },
+    {
+      name: "on-request",
+      message: "on-request",
+      value: "on-request",
+      hint: "Prompt for risky operations.",
+    },
+    {
+      name: "never",
+      message: "never",
+      value: "never",
+      hint: "Never prompt for approvals.",
+    },
   ]);
 
-  const modelReasoningEffort = await promptSelect(
+  const modelReasoningEffort = await promptAutoComplete(
     "Model reasoning effort:",
     [
-      { name: "unset", message: "unset (null)", value: null },
-      { name: "low", message: "low", value: "low" },
-      { name: "medium", message: "medium", value: "medium" },
-      { name: "high", message: "high", value: "high" },
-      { name: "extra-high", message: "extra-high", value: "extra-high" },
+      {
+        name: "unset",
+        message: "unset (null)",
+        value: null,
+        hint: "Use the Codex default",
+      },
+      {
+        name: "low",
+        message: "low",
+        value: "low",
+        hint: "Faster, less thorough reasoning.",
+      },
+      {
+        name: "medium",
+        message: "medium",
+        value: "medium",
+        hint: "Default balance of speed + depth.",
+      },
+      {
+        name: "high",
+        message: "high",
+        value: "high",
+        hint: "Deeper reasoning, slower.",
+      },
+      {
+        name: "xhigh",
+        message: "xhigh",
+        value: "xhigh",
+        hint: "Maximum depth, slowest.",
+      },
     ],
-    2
+    2,
   );
 
   return {
@@ -208,9 +359,11 @@ async function main() {
 
   const content = fs.readFileSync(templatePath, "utf8");
   const codexConfig = await collectCodexConfig();
-  const useDocker = await new Confirm({
+  const useDocker = await new Toggle({
     name: "use_docker",
     message: "Use Docker for the loop? (adds a docker section)",
+    enabled: "Yes",
+    disabled: "No",
     initial: false,
   }).run();
 
@@ -218,12 +371,16 @@ async function main() {
   updated = setYamlValue(updated, "model", codexConfig.model);
   updated = setYamlValue(updated, "profile", codexConfig.profile);
   updated = setYamlValue(updated, "sandbox", codexConfig.sandbox);
-  updated = setYamlValue(updated, "ask_for_approval", codexConfig.ask_for_approval);
+  updated = setYamlValue(
+    updated,
+    "ask_for_approval",
+    codexConfig.ask_for_approval,
+  );
   updated = setYamlValue(updated, "full_auto", codexConfig.full_auto);
   updated = setYamlValue(
     updated,
     "model_reasoning_effort",
-    codexConfig.model_reasoning_effort
+    codexConfig.model_reasoning_effort,
   );
 
   if (useDocker) {
@@ -234,7 +391,7 @@ async function main() {
 
   fs.writeFileSync(targetPath, `${updated.trimEnd()}\n`, "utf8");
   process.stdout.write(
-    `Success: configured ${path.relative(root, targetPath)}\n`
+    `Success: configured ${path.relative(root, targetPath)}\n`,
   );
 
   if (updateGitignore) {

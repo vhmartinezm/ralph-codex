@@ -6,7 +6,7 @@ import enquirer from "enquirer";
 import yaml from "js-yaml";
 import { colors, createLogStyler, createSpinner } from "../ui/terminal.js";
 
-const { Confirm, Editor, Input, MultiSelect, Select } = enquirer;
+const { AutoComplete, Confirm, Editor, Input, MultiSelect } = enquirer;
 
 const root = process.cwd();
 const agentDir = path.join(root, ".ralph");
@@ -117,10 +117,10 @@ function printHelp() {
       `  ${colors.green("--no-sandbox")}                    Use danger-full-access\n` +
       `  ${colors.green("--ask-for-approval <mode>")}       untrusted | on-failure | on-request | never\n` +
       `  ${colors.green("--full-auto")}                     workspace-write + on-request\n` +
-      `  ${colors.green("--reasoning [effort]")}            low | medium | high | extra-high (omit to pick)\n` +
+      `  ${colors.green("--reasoning [effort]")}            low | medium | high | xhigh (omit to pick)\n` +
       `  ${colors.green("--detect-success-criteria")}       Add auto-detected checks\n` +
       `  ${colors.green("--no-detect-success-criteria")}    Disable auto-detect\n` +
-      `  ${colors.green("-h, --help")}                      Show help\n\n`
+      `  ${colors.green("-h, --help")}                      Show help\n\n`,
   );
 }
 
@@ -133,7 +133,7 @@ const idea = ideaParts.join(" ").trim();
 
 if (!idea) {
   console.error(
-    "Usage: ralph-codex plan \"<idea>\" [--output <path>] [--tasks <path>] [--max-iterations <n>]"
+    'Usage: ralph-codex plan "<idea>" [--output <path>] [--tasks <path>] [--max-iterations <n>]',
   );
   process.exit(1);
 }
@@ -147,7 +147,7 @@ function loadConfig(configFilePath) {
     return yaml.load(content) || {};
   } catch (error) {
     console.error(
-      `Failed to read config at ${configFilePath}: ${error?.message || error}`
+      `Failed to read config at ${configFilePath}: ${error?.message || error}`,
     );
     process.exit(1);
   }
@@ -191,7 +191,10 @@ function parseRequiredTools(tasksFilePath) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    if (/^#+\s*required tools\b/i.test(line) || /^required tools\b/i.test(line)) {
+    if (
+      /^#+\s*required tools\b/i.test(line) ||
+      /^required tools\b/i.test(line)
+    ) {
       inSection = true;
       continue;
     }
@@ -223,36 +226,62 @@ function normalizeReasoningEffort(value) {
   if (!trimmed) return null;
   const lowered = trimmed.toLowerCase();
   if (["null", "unset", "none", "default"].includes(lowered)) return null;
+  if (lowered === "extra-high" || lowered === "extra_high") return "xhigh";
+  if (["low", "medium", "high", "xhigh"].includes(lowered)) return lowered;
   return trimmed;
 }
 
 async function promptReasoningEffort(currentValue) {
   const choices = [
-    { name: "unset", message: "unset (null; use Codex default)", value: null },
-    { name: "low", message: "low", value: "low" },
-    { name: "medium", message: "medium", value: "medium" },
-    { name: "high", message: "high", value: "high" },
-    { name: "extra-high", message: "extra-high", value: "extra-high" },
+    {
+      name: "unset",
+      message: "unset (null)",
+      value: null,
+      hint: "Use the Codex default",
+    },
+    {
+      name: "low",
+      message: "low",
+      value: "low",
+      hint: "Faster, less thorough reasoning.",
+    },
+    {
+      name: "medium",
+      message: "medium",
+      value: "medium",
+      hint: "Default balance of speed + depth.",
+    },
+    {
+      name: "high",
+      message: "high",
+      value: "high",
+      hint: "Deeper reasoning, slower.",
+    },
+    {
+      name: "xhigh",
+      message: "xhigh",
+      value: "xhigh",
+      hint: "Maximum depth, slowest.",
+    },
   ];
   const normalized = normalizeReasoningEffort(currentValue) || "medium";
   const initial = Math.max(
     0,
     choices.findIndex((choice) => choice.value === normalized)
   );
-  const prompt = new Select({
+  const prompt = new AutoComplete({
     name: "reasoning",
     message: "Select model reasoning effort:",
     choices,
     initial,
+    limit: Math.min(choices.length, 7),
   });
   return prompt.run();
 }
 
 function normalizeChoiceList(value) {
   if (!Array.isArray(value)) return null;
-  const cleaned = value
-    .map((item) => String(item).trim())
-    .filter(Boolean);
+  const cleaned = value.map((item) => String(item).trim()).filter(Boolean);
   return cleaned.length > 0 ? cleaned : null;
 }
 
@@ -298,7 +327,7 @@ function detectNodeSuccessCriteria() {
   const scripts = pkg && typeof pkg === "object" ? pkg.scripts : null;
   if (!scripts || typeof scripts !== "object") return [];
   const scriptNames = Object.keys(scripts).filter(
-    (name) => name && !name.startsWith("pre") && !name.startsWith("post")
+    (name) => name && !name.startsWith("pre") && !name.startsWith("post"),
   );
   if (scriptNames.length === 0) return [];
   const preferred = [
@@ -319,9 +348,11 @@ function detectNodeSuccessCriteria() {
   const commands = picked.map((name) => buildScriptCommand(name, manager));
   if (commands.length > 0) return commands;
   const keywordMatches = scriptNames.filter((name) =>
-    /(test|lint|build|typecheck|check|ci|e2e)/.test(name)
+    /(test|lint|build|typecheck|check|ci|e2e)/.test(name),
   );
-  return keywordMatches.slice(0, 6).map((name) => buildScriptCommand(name, manager));
+  return keywordMatches
+    .slice(0, 6)
+    .map((name) => buildScriptCommand(name, manager));
 }
 
 function detectMakeTargets() {
@@ -356,7 +387,8 @@ function detectPythonSuccessCriteria() {
     fileContains("pyproject.toml", "[tool.pytest") ||
     fileContains("setup.cfg", "[tool:pytest]");
   const hasTestsDir =
-    fs.existsSync(path.join(root, "tests")) || fs.existsSync(path.join(root, "test"));
+    fs.existsSync(path.join(root, "tests")) ||
+    fs.existsSync(path.join(root, "test"));
   const choices = [];
   if (fileExists("tox.ini")) choices.push("tox");
   if (fileExists("noxfile.py")) choices.push("nox");
@@ -398,7 +430,7 @@ function detectDotNetSuccessCriteria() {
       (entry.name.endsWith(".sln") ||
         entry.name.endsWith(".csproj") ||
         entry.name.endsWith(".fsproj") ||
-        entry.name.endsWith(".vbproj"))
+        entry.name.endsWith(".vbproj")),
   );
   return hasDotNet ? ["dotnet test"] : [];
 }
@@ -480,8 +512,12 @@ function inferRequiredTools(content) {
 function enrichRequiredTools(tasksFilePath) {
   if (!fs.existsSync(tasksFilePath)) return;
   const content = fs.readFileSync(tasksFilePath, "utf8");
-  const { lines, start, end, tools: existing } =
-    extractRequiredToolsSection(content);
+  const {
+    lines,
+    start,
+    end,
+    tools: existing,
+  } = extractRequiredToolsSection(content);
   const inferred = inferRequiredTools(content);
 
   const merged = {
@@ -500,7 +536,7 @@ function enrichRequiredTools(tasksFilePath) {
   let updatedLines = lines.slice();
   if (start === -1) {
     const successIndex = updatedLines.findIndex((line) =>
-      /^##\s*success criteria\b/i.test(line.trim())
+      /^##\s*success criteria\b/i.test(line.trim()),
     );
     if (successIndex !== -1) {
       let insertAt = updatedLines.length;
@@ -528,18 +564,9 @@ function ensureDockerfile(dockerConfig, requiredTools) {
   if (!dockerConfig.enabled) return;
   const dockerfilePath = path.join(root, dockerConfig.dockerfile);
   const tools = requiredTools || { apt: [], npm: [], pip: [] };
-  const aptPackages = uniqueList([
-    ...dockerConfig.aptPackages,
-    ...tools.apt,
-  ]);
-  const npmGlobals = uniqueList([
-    ...dockerConfig.npmGlobals,
-    ...tools.npm,
-  ]);
-  const pipPackages = uniqueList([
-    ...dockerConfig.pipPackages,
-    ...tools.pip,
-  ]);
+  const aptPackages = uniqueList([...dockerConfig.aptPackages, ...tools.apt]);
+  const npmGlobals = uniqueList([...dockerConfig.npmGlobals, ...tools.npm]);
+  const pipPackages = uniqueList([...dockerConfig.pipPackages, ...tools.pip]);
 
   if (pipPackages.length > 0) {
     if (!aptPackages.includes("python3")) aptPackages.push("python3");
@@ -552,7 +579,7 @@ function ensureDockerfile(dockerConfig, requiredTools) {
     `FROM ${dockerConfig.baseImage}`,
     aptPackages.length > 0
       ? `RUN apt-get update && apt-get install -y ${aptPackages.join(
-          " "
+          " ",
         )} && rm -rf /var/lib/apt/lists/*`
       : "RUN apt-get update && rm -rf /var/lib/apt/lists/*",
     `WORKDIR ${dockerConfig.workdir}`,
@@ -585,7 +612,7 @@ function ensureDockerImage(dockerConfig) {
   const result = spawnSync(
     "docker",
     ["build", "-f", dockerfilePath, "-t", dockerConfig.image, "."],
-    { stdio: "inherit", cwd: root }
+    { stdio: "inherit", cwd: root },
   );
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
@@ -600,7 +627,12 @@ function buildDockerRunArgs(dockerConfig) {
     dockerConfig.tty === "true" ||
     (dockerConfig.tty === "auto" && process.stdin.isTTY);
   if (wantsTty) args.push("-t");
-  args.push("-v", `${root}:${dockerConfig.workdir}`, "-w", dockerConfig.workdir);
+  args.push(
+    "-v",
+    `${root}:${dockerConfig.workdir}`,
+    "-w",
+    dockerConfig.workdir,
+  );
   const codexHome = path.isAbsolute(dockerConfig.codexHome)
     ? dockerConfig.codexHome
     : path.join(root, dockerConfig.codexHome);
@@ -668,10 +700,7 @@ async function runCodex(prompt, spinnerText) {
     args.push("--config", `ask_for_approval=${askForApproval}`);
   }
   if (modelReasoningEffort) {
-    args.push(
-      "--config",
-      `model_reasoning_effort=${modelReasoningEffort}`
-    );
+    args.push("--config", `model_reasoning_effort=${modelReasoningEffort}`);
   }
 
   const resolvedSandbox = noSandbox ? "danger-full-access" : sandbox;
@@ -684,7 +713,7 @@ async function runCodex(prompt, spinnerText) {
   if (activeDockerConfig?.enabled) {
     if (!activeDockerConfig.codexInstall) {
       console.error(
-        "docker.codex_install is required when docker.enabled is true."
+        "docker.codex_install is required when docker.enabled is true.",
       );
       process.exit(1);
     }
@@ -806,15 +835,39 @@ async function readUserAnswers(questions) {
   return input.run();
 }
 
-async function selectSuccessCriteria(defaultCriteria, standardChoices) {
-  const customChoice = "Add custom command(s)";
-  const defaults = defaultCriteria && defaultCriteria.length > 0
-    ? defaultCriteria
-    : standardChoices;
+async function selectSuccessCriteria(
+  defaultCriteria,
+  standardChoices,
+  detectedChoices = []
+) {
+  const customChoiceValue = "__custom__";
+  const defaults =
+    defaultCriteria && defaultCriteria.length > 0
+      ? defaultCriteria
+      : standardChoices;
   const extras = (defaultCriteria || []).filter(
     (item) => !standardChoices.includes(item)
   );
-  const choices = [...standardChoices, ...extras, customChoice];
+  const baseChoices = uniqueList([...standardChoices, ...extras]);
+  const detectedSet = new Set(detectedChoices || []);
+  const extraSet = new Set(extras);
+  const choices = baseChoices.map((choice) => {
+    let hint = "recommended";
+    if (detectedSet.has(choice)) hint = "detected";
+    if (extraSet.has(choice)) hint = "from config";
+    return {
+      name: choice,
+      message: choice,
+      value: choice,
+      hint,
+    };
+  });
+  choices.push({
+    name: customChoiceValue,
+    message: "Add custom command(s)",
+    value: customChoiceValue,
+    hint: "Enter your own commands.",
+  });
 
   const prompt = new MultiSelect({
     name: "criteria",
@@ -822,7 +875,7 @@ async function selectSuccessCriteria(defaultCriteria, standardChoices) {
     choices,
     initial: choices
       .map((choice, index) =>
-        defaults.includes(choice) ? index : null
+        defaults.includes(choice.value) ? index : null
       )
       .filter((index) => index !== null),
   });
@@ -832,8 +885,8 @@ async function selectSuccessCriteria(defaultCriteria, standardChoices) {
     throw new Error("You must select at least one completion check.");
   }
 
-  const wantsCustom = selected.includes(customChoice);
-  selected = selected.filter((item) => item !== customChoice);
+  const wantsCustom = selected.includes(customChoiceValue);
+  selected = selected.filter((item) => item !== customChoiceValue);
 
   if (wantsCustom) {
     const input = await new Input({
@@ -903,8 +956,7 @@ function resetState(tasksFilePath, agentPath) {
 }
 
 async function main() {
-  const resolvedConfigPath =
-    configPath || path.join(root, "ralph.config.yml");
+  const resolvedConfigPath = configPath || path.join(root, "ralph.config.yml");
   const config = loadConfig(resolvedConfigPath);
   const codexConfig = config?.codex || {};
   const planConfig = config?.plan || {};
@@ -953,10 +1005,10 @@ async function main() {
         : Boolean(planConfig.auto_detect_success_criteria);
     const detectedChoices = autoDetectEnabled ? detectSuccessCriteria() : [];
     const configuredDefaults = normalizeChoiceList(
-      planConfig.default_success_criteria || config?.run?.success_criteria
+      planConfig.default_success_criteria || config?.run?.success_criteria,
     );
     const configuredChoices = normalizeChoiceList(
-      planConfig.success_choices || config?.run?.success_criteria
+      planConfig.success_choices || config?.run?.success_criteria,
     );
     const baseChoices = configuredChoices || fallbackChoices;
     const standardChoices =
@@ -966,15 +1018,17 @@ async function main() {
     const defaults =
       configuredDefaults ||
       (detectedChoices.length > 0 ? detectedChoices : baseChoices);
-    selected = await selectSuccessCriteria(defaults, standardChoices);
+    selected = await selectSuccessCriteria(
+      defaults,
+      standardChoices,
+      detectedChoices
+    );
   } catch (error) {
     console.error(error?.message || "Failed to select completion checks.");
     process.exit(1);
   }
 
-  const successCriteria = selected
-    .map((item) => `  - \`${item}\``)
-    .join("\n");
+  const successCriteria = selected.map((item) => `  - \`${item}\``).join("\n");
   const promptBase = buildPrompt(successCriteria);
 
   const first = await runCodex(promptBase, "Generating plan...");
@@ -1026,7 +1080,7 @@ async function main() {
     const requiredTools = parseRequiredTools(tasksFile);
     ensureDockerfile(dockerConfig, requiredTools);
     process.stdout.write(
-      `Generated ${dockerConfig.dockerfile} with required tools.\n`
+      `Generated ${dockerConfig.dockerfile} with required tools.\n`,
     );
   }
 }

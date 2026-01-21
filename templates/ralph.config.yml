@@ -6,7 +6,7 @@ codex:
   sandbox: null # read-only | workspace-write | danger-full-access
   ask_for_approval: null # untrusted | on-failure | on-request | never
   full_auto: false # true enables workspace-write + on-request
-  model_reasoning_effort: null # low | medium | high | extra-high
+  model_reasoning_effort: null # low | medium | high | xhigh
 
 docker:
   enabled: false

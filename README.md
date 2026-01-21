@@ -134,7 +134,7 @@ Codex settings quick guide:
 - `sandbox` sets permission mode (`read-only`, `workspace-write`, `danger-full-access`; default `null`).
 - `ask_for_approval` controls prompt behavior (`untrusted`, `on-failure`, `on-request`, `never`; default `null`).
 - `full_auto` is a convenience preset for `workspace-write` + `on-request` (default `false`).
-- `model_reasoning_effort` chooses reasoning level (`low`, `medium`, `high`, `extra-high`; default `null`).
+- `model_reasoning_effort` chooses reasoning level (`low`, `medium`, `high`, `xhigh`; default `null`).
 
 Enable `plan.auto_detect_success_criteria` to add detected checks based on repo files.
 
