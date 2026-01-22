@@ -23,7 +23,8 @@ const showHelp = () => {
       `  ${colors.green("revise")}      Add new tasks from feedback (alias: refine)\n` +
       `  ${colors.green("view")}        Show tasks, criteria, and config summaries\n` +
       `  ${colors.green("reset")}       Reset all tasks in tasks.md to [ ]\n` +
-      `  ${colors.green("docker")}      Pick a Docker base image via Codex and update config\n\n` +
+      `  ${colors.green("docker")}      Pick a Docker base image via Codex and update config\n` +
+      `  ${colors.green("completion")}  Print shell completion script (bash|zsh|fish)\n\n` +
       `${colors.yellow("Examples:")}\n` +
       `  ralph-codex init\n` +
       `  ralph-codex plan "Add screenshot flow"\n` +
@@ -31,6 +32,7 @@ const showHelp = () => {
       `  ralph-codex revise "Improve copy"\n` +
       `  ralph-codex view tasks --only pending\n` +
       `  ralph-codex reset\n\n` +
+      `  ralph-codex completion zsh\n\n` +
       `${colors.gray('Tip: run "ralph-codex <command> --help" for command options.')}\n\n`
   );
 };

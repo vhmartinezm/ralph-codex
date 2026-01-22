@@ -143,6 +143,22 @@ Ask Codex for a base image and update Docker config.
 ralph-codex docker [--config <path>]
 ```
 
+### completion
+
+Print shell completion scripts.
+
+```bash
+ralph-codex completion bash
+ralph-codex completion zsh
+ralph-codex completion fish
+```
+
+Enable in your shell:
+
+- Bash: `echo 'source <(ralph-codex completion bash)' >> ~/.bashrc`
+- Zsh: `echo 'source <(ralph-codex completion zsh)' >> ~/.zshrc`
+- Fish: `ralph-codex completion fish > ~/.config/fish/completions/ralph-codex.fish`
+
 ## Configuration
 
 The CLI reads `ralph.config.yml` in the project root. Use `--config <path>` to point elsewhere.
