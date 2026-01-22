@@ -2,6 +2,17 @@
   "name": "ralph-codex",
   "version": "0.1.0",
   "description": "Codex-first Ralph-style planning and run loops",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vhmartinezm/ralph-codex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vhmartinezm/ralph-codex/issues"
+  },
+  "homepage": "https://github.com/vhmartinezm/ralph-codex#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "type": "module",
   "bin": {
