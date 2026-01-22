@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
 import { colors } from "../ui/terminal.js";
+import { parseSuccessCriteria, parseTasks } from "../lib/tasks.js";
 
 const root = process.cwd();
 const argv = process.argv.slice(2);
@@ -156,21 +157,6 @@ function formatStatus(status) {
   return { raw, display: colors.gray(raw) };
 }
 
-function parseTasks(content) {
-  const tasks = [];
-  const lines = content.split(/\r?\n/);
-  let index = 0;
-  for (const line of lines) {
-    const match = line.match(/^\s*[-*]\s+\[([ x~])\]\s+(.*)$/);
-    if (!match) continue;
-    index += 1;
-    const statusToken = match[1].toLowerCase();
-    const status =
-      statusToken === "x" ? "done" : statusToken === "~" ? "blocked" : "pending";
-    tasks.push({ index, status, text: match[2].trim() });
-  }
-  return tasks;
-}
 
 function summarizeTasks(tasks) {
   const total = tasks.length;
@@ -186,26 +172,6 @@ function filterTasks(tasks, filter) {
   return tasks.filter((task) => task.status === filter);
 }
 
-function extractSuccessCriteria(content) {
-  const lines = content.split(/\r?\n/);
-  let start = -1;
-  for (let i = 0; i < lines.length; i += 1) {
-    if (/^(#+\s*)?success criteria\b/i.test(lines[i].trim())) {
-      start = i;
-      break;
-    }
-  }
-  if (start === -1) return [];
-  const items = [];
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    if (/^#+\s+/.test(line)) break;
-    if (line.startsWith("- ")) items.push(line.slice(2).trim());
-    if (line.startsWith("* ")) items.push(line.slice(2).trim());
-  }
-  return items;
-}
 
 function getLastBlocker(logPath) {
   if (!fs.existsSync(logPath)) return "";
@@ -339,6 +305,7 @@ function getConfigRows(config) {
       use_for_plan: false,
       base_image: "node:20-bullseye",
       codex_install: "",
+      tty: false,
     },
     plan: {
       tasks_path: "tasks.md",
@@ -468,7 +435,7 @@ function renderOnce({ allowMissingTasks }) {
     const summary = summarizeTasks(allTasks);
     const filtered = filterTasks(allTasks, only);
     const sliced = limit > 0 ? filtered.slice(0, limit) : filtered;
-    const criteria = extractSuccessCriteria(tasksContent);
+    const criteria = parseSuccessCriteria(tasksContent);
 
     tasksData = {
       path: resolvedTasksPath,

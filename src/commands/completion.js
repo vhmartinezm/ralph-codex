@@ -130,9 +130,9 @@ _ralph_codex_completion_promise_list() {
 
 _ralph_codex() {
   local cur prev cmd
-  cur="\\${COMP_WORDS[COMP_CWORD]}"
-  prev="\\${COMP_WORDS[COMP_CWORD-1]}"
-  cmd="\\${COMP_WORDS[1]}"
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+  prev="\${COMP_WORDS[COMP_CWORD-1]}"
+  cmd="\${COMP_WORDS[1]}"
 
   local commands="init plan run revise refine view reset docker completion help"
   local root_opts="--help -h --version -v"
@@ -174,6 +174,10 @@ _ralph_codex() {
           COMPREPLY=( $(compgen -W "$tasks" -- "$cur") $(compgen -f -- "$cur") )
           return 0
           ;;
+        --idea-file)
+          COMPREPLY=( $(compgen -f -- "$cur") )
+          return 0
+          ;;
         --sandbox)
           COMPREPLY=( $(compgen -W "read-only workspace-write danger-full-access" -- "$cur") )
           return 0
@@ -199,7 +203,7 @@ _ralph_codex() {
           return 0
           ;;
       esac
-      local opts="--output --tasks --max-iterations --config --model -m --profile -p --sandbox --no-sandbox --ask-for-approval --full-auto --reasoning --detect-success-criteria --no-detect-success-criteria --help -h"
+      local opts="--output --tasks --idea-file --stdin --max-iterations --config --model -m --profile -p --sandbox --no-sandbox --ask-for-approval --full-auto --reasoning --detect-success-criteria --no-detect-success-criteria --help -h"
       COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
       return 0
       ;;
@@ -525,6 +529,8 @@ _ralph_codex() {
           _arguments \\
             '--output[Write tasks to a custom file]:path:_ralph_codex_tasks' \\
             '--tasks[Write tasks to a custom file]:path:_ralph_codex_tasks' \\
+            '--idea-file[Read idea from a markdown file]:file:_files' \\
+            '--stdin[Read idea from stdin]' \\
             '--max-iterations[Max planning iterations]:number:' \\
             '--config[Path to ralph.config.yml]:file:_ralph_codex_configs' \\
             '(-m --model)'{-m,--model}'[Codex model]:model:_ralph_codex_models' \\
@@ -745,6 +751,8 @@ complete -c ralph-codex -n '__fish_seen_subcommand_from init' -l no-gitignore -d
 
 complete -c ralph-codex -n '__fish_seen_subcommand_from plan' -l output -r -a '(__ralph_codex_tasks)' -d 'Write tasks to a custom file'
 complete -c ralph-codex -n '__fish_seen_subcommand_from plan' -l tasks -r -a '(__ralph_codex_tasks)' -d 'Write tasks to a custom file'
+complete -c ralph-codex -n '__fish_seen_subcommand_from plan' -l idea-file -r -a '(__fish_complete_path)' -d 'Read idea from a markdown file'
+complete -c ralph-codex -n '__fish_seen_subcommand_from plan' -l stdin -d 'Read idea from stdin'
 complete -c ralph-codex -n '__fish_seen_subcommand_from plan' -l max-iterations -r -d 'Max planning iterations'
 complete -c ralph-codex -n '__fish_seen_subcommand_from plan' -l config -r -a '(__ralph_codex_configs)' -d 'Path to ralph.config.yml'
 complete -c ralph-codex -n '__fish_seen_subcommand_from plan' -s m -l model -r -a '(__ralph_codex_models)' -d 'Codex model'

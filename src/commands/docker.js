@@ -8,6 +8,7 @@ const { Confirm } = enquirer;
 
 const root = process.cwd();
 const defaultConfigPath = path.join(root, "ralph.config.yml");
+const isTestMode = process.env.RALPH_TEST_MODE === "1";
 
 const argv = process.argv.slice(2);
 let configPath = null;
@@ -148,13 +149,13 @@ async function main() {
     process.exit(1);
   }
 
-  const confirm = new Confirm({
-    name: "confirm",
-    message: `Set docker.enabled=true and base_image=${baseImage}?`,
-    initial: true,
-  });
-
-  const approved = await confirm.run();
+  const approved = isTestMode
+    ? true
+    : await new Confirm({
+        name: "confirm",
+        message: `Set docker.enabled=true and base_image=${baseImage}?`,
+        initial: true,
+      }).run();
   if (!approved) {
     process.stdout.write("Aborted by user.\n");
     process.exit(1);

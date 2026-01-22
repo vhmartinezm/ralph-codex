@@ -278,7 +278,7 @@ function resolveDockerConfig(config) {
     fixAttempts: Number(dockerConfig.fix_attempts || 2),
     fixUseHost: dockerConfig.fix_use_host !== false,
     fixLog: dockerConfig.fix_log || ".ralph/docker-build.log",
-    tty: dockerConfig.tty ?? "auto",
+    tty: dockerConfig.tty ?? false,
     cleanup: dockerConfig.cleanup || "none",
   };
 }

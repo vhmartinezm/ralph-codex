@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+
+import fs from "fs";
+import path from "path";
+
+let prompt = "";
+try {
+  prompt = fs.readFileSync(0, "utf8");
+} catch (_) {
+  prompt = "";
+}
+
+const cwd = process.cwd();
+
+const defaultTasks = `# Tasks
+- [ ] Example task
+
+## Success criteria
+- Run the project's primary test suite
+
+## Required tools
+- apt: none
+- npm: none
+- pip: none
+`;
+
+const sanitizePath = (value) => {
+  if (!value) return null;
+  const token = value.trim().split(/\s+/)[0];
+  return token
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .replace(/[.,]+$/, "");
+};
+
+const extractPath = (patterns) => {
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    if (match && match[1]) {
+      const cleaned = sanitizePath(match[1]);
+      if (cleaned) return cleaned;
+    }
+  }
+  return null;
+};
+
+const writeFile = (filePath, content) => {
+  const absolute = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(cwd, filePath);
+  fs.mkdirSync(path.dirname(absolute), { recursive: true });
+  fs.writeFileSync(absolute, content, "utf8");
+};
+
+const completionMatch = prompt.match(/output exactly:\s*([^\r\n]+)/i);
+const completionToken = completionMatch ? completionMatch[1].trim() : null;
+
+if (prompt.includes("# Ralph Plan")) {
+  const tasksPath =
+    extractPath([
+      /Output a Markdown task list to ([^\r\n]+)/i,
+      /Do not edit any files other than ([^\r\n]+)/i,
+    ]) || "tasks.md";
+  const content = process.env.CODEX_STUB_TASKS || defaultTasks;
+  writeFile(tasksPath, content);
+  process.stdout.write(`${completionToken || "LOOP_COMPLETE"}\n`);
+  process.exit(0);
+}
+
+if (prompt.includes("# Ralph Revise")) {
+  const outputPath =
+    extractPath([
+      /Output file:\s*([^\r\n]+)/i,
+      /write updated tasks to ([^\r\n]+)/i,
+    ]) || ".ralph/tasks.revise.md";
+  const tasksPath =
+    extractPath([
+      /Current tasks:\s*([^\r\n]+)/i,
+      /Read ([^\r\n]+) and write updated tasks/i,
+    ]) || "tasks.md";
+  const absoluteTasks = path.isAbsolute(tasksPath)
+    ? tasksPath
+    : path.join(cwd, tasksPath);
+  let content = process.env.CODEX_STUB_TASKS || defaultTasks;
+  if (fs.existsSync(absoluteTasks)) {
+    content = fs.readFileSync(absoluteTasks, "utf8");
+  }
+  if (process.env.CODEX_STUB_APPEND_TASK) {
+    content = content.replace(
+      /(\r?\n## Success criteria)/,
+      "\n- [ ] Stubbed follow-up task$1",
+    );
+  }
+  writeFile(outputPath, content);
+  process.stdout.write(`${completionToken || "LOOP_COMPLETE"}\n`);
+  process.exit(0);
+}
+
+if (prompt.includes("BASE_IMAGE:")) {
+  const image = process.env.CODEX_STUB_BASE_IMAGE || "node:20-bullseye";
+  process.stdout.write(`BASE_IMAGE: ${image}\n`);
+  process.exit(0);
+}
+
+if (completionToken) {
+  process.stdout.write(`${completionToken}\n`);
+  process.exit(0);
+}
+
+process.stdout.write("LOOP_COMPLETE\n");

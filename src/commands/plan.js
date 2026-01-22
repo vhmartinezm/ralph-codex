@@ -10,10 +10,13 @@ const { AutoComplete, Confirm, Editor, Input, MultiSelect } = enquirer;
 
 const root = process.cwd();
 const agentDir = path.join(root, ".ralph");
+const isTestMode = process.env.RALPH_TEST_MODE === "1";
 
 const argv = process.argv.slice(2);
 let maxIterations = "1";
 let tasksPath = "tasks.md";
+let ideaFile = null;
+let readStdin = false;
 let noSandbox = false;
 let sandbox = null;
 let fullAuto = false;
@@ -27,6 +30,7 @@ let autoDetectSuccessCriteria = null;
 let reasoningChoice;
 let showHelp = false;
 const ideaParts = [];
+let idea = "";
 
 for (let i = 0; i < argv.length; i += 1) {
   const arg = argv[i];
@@ -47,6 +51,20 @@ for (let i = 0; i < argv.length; i += 1) {
   if (arg === "--output") {
     tasksPath = argv[i + 1];
     i += 1;
+    continue;
+  }
+  if (arg === "--idea-file") {
+    const value = argv[i + 1];
+    if (!value || (value.startsWith("-") && value !== "-")) {
+      console.error("Missing --idea-file <path>.");
+      process.exit(1);
+    }
+    ideaFile = value;
+    i += 1;
+    continue;
+  }
+  if (arg === "--stdin") {
+    readStdin = true;
     continue;
   }
   if (arg === "--no-sandbox") {
@@ -109,6 +127,8 @@ function printHelp() {
       `${colors.yellow("Options:")}\n` +
       `  ${colors.green("--output <path>")}                 Write tasks to a custom file (alias of --tasks)\n` +
       `  ${colors.green("--tasks <path>")}                  Write tasks to a custom file (default: tasks.md)\n` +
+      `  ${colors.green("--idea-file <path>")}              Read idea from a markdown file ('-' for stdin)\n` +
+      `  ${colors.green("--stdin")}                         Read idea from stdin (paste then Ctrl-D)\n` +
       `  ${colors.green("--max-iterations <n>")}            Max planning iterations (default: 1)\n` +
       `  ${colors.green("--config <path>")}                 Path to ralph.config.yml\n` +
       `  ${colors.green("--model <name>, -m")}              Codex model\n` +
@@ -129,16 +149,24 @@ if (showHelp) {
   process.exit(0);
 }
 
-const idea = ideaParts.join(" ").trim();
+const promptPath = path.join(agentDir, "ralph-plan-prompt.md");
 
-if (!idea) {
-  console.error(
-    'Usage: ralph-codex plan "<idea>" [--output <path>] [--tasks <path>] [--max-iterations <n>]',
-  );
-  process.exit(1);
+function readIdeaFromStdin() {
+  try {
+    return fs.readFileSync(0, "utf8");
+  } catch (_) {
+    return "";
+  }
 }
 
-const promptPath = path.join(agentDir, "ralph-plan-prompt.md");
+function readIdeaFromFile(filePath) {
+  const resolved = path.resolve(root, filePath);
+  if (!fs.existsSync(resolved)) {
+    console.error(`Missing idea file: ${filePath}`);
+    process.exit(1);
+  }
+  return fs.readFileSync(resolved, "utf8");
+}
 function loadConfig(configFilePath) {
   if (!configFilePath) return {};
   if (!fs.existsSync(configFilePath)) return {};
@@ -175,7 +203,7 @@ function resolveDockerConfig(config) {
       ? dockerConfig.pip_packages
       : [],
     useForPlan: Boolean(dockerConfig.use_for_plan),
-    tty: dockerConfig.tty ?? "auto",
+    tty: dockerConfig.tty ?? false,
   };
 }
 
@@ -862,6 +890,13 @@ async function selectSuccessCriteria(
   standardChoices,
   detectedChoices = []
 ) {
+  if (isTestMode) {
+    const safeDefaults =
+      defaultCriteria && defaultCriteria.length > 0
+        ? defaultCriteria
+        : standardChoices;
+    return { mode: "manual", criteria: safeDefaults || [] };
+  }
   const autoChoiceValue = "__auto__";
   const customChoiceValue = "__custom__";
   const defaults =
@@ -955,6 +990,7 @@ async function selectSuccessCriteria(
 }
 
 async function confirmPlan(tasksFile) {
+  if (isTestMode) return true;
   const content = fs.readFileSync(tasksFile, "utf8");
   process.stdout.write(`\n${colors.cyan("--- Proposed tasks.md ---")}\n\n`);
   process.stdout.write(content);
@@ -978,6 +1014,7 @@ async function readRevisionFeedback() {
 }
 
 async function confirmResetState(tasksFilePath, agentPath) {
+  if (isTestMode) return false;
   const hasTasks = fs.existsSync(tasksFilePath);
   const hasAgent = fs.existsSync(agentPath);
   if (!hasTasks && !hasAgent) return false;
@@ -1000,6 +1037,23 @@ function resetState(tasksFilePath, agentPath) {
 }
 
 async function main() {
+  const ideaFromArgs = ideaParts.join(" ").trim();
+  if (ideaFile) {
+    idea = ideaFile === "-" ? readIdeaFromStdin() : readIdeaFromFile(ideaFile);
+  } else if (readStdin || (!ideaFromArgs && !process.stdin.isTTY)) {
+    idea = readIdeaFromStdin();
+  } else {
+    idea = ideaFromArgs;
+  }
+
+  idea = String(idea || "").trim();
+  if (!idea) {
+    console.error(
+      'Usage: ralph-codex plan "<idea>" [--idea-file <path>] [--stdin] [--output <path>] [--tasks <path>] [--max-iterations <n>]',
+    );
+    process.exit(1);
+  }
+
   const resolvedConfigPath = configPath || path.join(root, "ralph.config.yml");
   const config = loadConfig(resolvedConfigPath);
   const codexConfig = config?.codex || {};

@@ -7,6 +7,7 @@ const { AutoComplete, Confirm, Input, Toggle } = enquirer;
 
 const root = process.cwd();
 const argv = process.argv.slice(2);
+const isTestMode = process.env.RALPH_TEST_MODE === "1";
 
 let force = false;
 let configPath = null;
@@ -42,6 +43,7 @@ const targetPath = configPath
   : path.join(root, "ralph.config.yml");
 
 async function confirmOverwrite() {
+  if (isTestMode) return true;
   const confirm = new Confirm({
     name: "overwrite",
     message: `Overwrite existing ${path.relative(root, targetPath)}?`,
@@ -224,6 +226,16 @@ async function promptModelChoice() {
 }
 
 async function collectCodexConfig() {
+  if (isTestMode) {
+    return {
+      model: null,
+      profile: null,
+      sandbox: null,
+      ask_for_approval: null,
+      full_auto: false,
+      model_reasoning_effort: null,
+    };
+  }
   const model = await promptModelChoice();
   const profile = await promptOptionalInput(
     "Codex CLI profile (optional; leave blank to use Codex default)",
@@ -359,13 +371,15 @@ async function main() {
 
   const content = fs.readFileSync(templatePath, "utf8");
   const codexConfig = await collectCodexConfig();
-  const useDocker = await new Toggle({
-    name: "use_docker",
-    message: "Use Docker for the loop? (adds a docker section)",
-    enabled: "Yes",
-    disabled: "No",
-    initial: false,
-  }).run();
+  const useDocker = isTestMode
+    ? process.env.RALPH_TEST_USE_DOCKER === "1"
+    : await new Toggle({
+        name: "use_docker",
+        message: "Use Docker for the loop? (adds a docker section)",
+        enabled: "Yes",
+        disabled: "No",
+        initial: false,
+      }).run();
 
   let updated = content;
   updated = setYamlValue(updated, "model", codexConfig.model);
