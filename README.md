@@ -1,5 +1,7 @@
 # ralph-codex
 
+![ralph-codex](docs/ralph-codex.jpg)
+
 Codex-first Ralph-style planning and run loops.
 
 ## What it does
