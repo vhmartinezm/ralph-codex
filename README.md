@@ -9,6 +9,8 @@ Codex-first Ralph-style planning and run loops.
 - Optional Docker mode for reproducible runs.
 - Colorized Codex output in TTY for easier scanning (disable with `NO_COLOR=1`).
 
+![Ralph Codex normal workflow](docs/ralph-codex-workflow.png)
+
 ## Requirements
 
 - Node.js >= 18
@@ -90,7 +92,7 @@ Useful options:
 
 ### revise
 
-Add new tasks from feedback without changing existing tasks (alias: `refine`).
+Add new tasks from feedback without changing existing tasks.
 
 ```bash
 ralph-codex revise "<feedback>" [--tasks <path>] [--run]
@@ -142,22 +144,6 @@ Ask Codex for a base image and update Docker config.
 ```bash
 ralph-codex docker [--config <path>]
 ```
-
-### completion
-
-Print shell completion scripts.
-
-```bash
-ralph-codex completion bash
-ralph-codex completion zsh
-ralph-codex completion fish
-```
-
-Enable in your shell:
-
-- Bash: `echo 'source <(ralph-codex completion bash)' >> ~/.bashrc`
-- Zsh: `echo 'source <(ralph-codex completion zsh)' >> ~/.zshrc`
-- Fish: `ralph-codex completion fish > ~/.config/fish/completions/ralph-codex.fish`
 
 ## Configuration
 
