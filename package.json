@@ -18,9 +18,13 @@
   "bin": {
     "ralph-codex": "bin/ralph-codex.js"
   },
+  "exports": {
+    "./package.json": "./package.json"
+  },
   "engines": {
     "node": ">=18"
   },
+  "packageManager": "npm@10.8.2",
   "dependencies": {
     "cli-progress": "^3.12.0",
     "enquirer": "^2.4.1",
@@ -32,6 +36,7 @@
     "bin",
     "src",
     "templates",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
