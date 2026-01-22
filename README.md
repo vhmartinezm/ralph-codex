@@ -67,6 +67,7 @@ Common options:
 - `--reasoning [effort]` override reasoning effort; omit value to pick from a list (defaults to medium).
 - `--detect-success-criteria` add auto-detected checks to the success list.
 - `--no-detect-success-criteria` disable auto-detect (overrides config).
+- In the interactive checklist, choose `Ask Codex to choose` to let Codex derive success criteria.
 
 ### run
 
@@ -89,7 +90,7 @@ Useful options:
 
 ### revise
 
-Add new tasks from feedback without changing existing tasks.
+Add new tasks from feedback without changing existing tasks (alias: `refine`).
 
 ```bash
 ralph-codex revise "<feedback>" [--tasks <path>] [--run]

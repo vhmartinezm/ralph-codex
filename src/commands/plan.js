@@ -656,7 +656,13 @@ function buildDockerRunArgs(dockerConfig) {
   return args;
 }
 
-function buildPrompt(successCriteria) {
+function buildPrompt({ successCriteria, autoCriteria }) {
+  const successCriteriaBlock = autoCriteria
+    ? `- Include a short "Success criteria" section with 3-6 items derived from the tasks you propose and this repo.
+- Prefer real commands you can infer from project files (package.json scripts, Makefile targets, pyproject tools, etc.).
+- If no reliable command exists, include 1 manual verification check tied to the main flow.`
+    : `- Include a short "Success criteria" section with exactly these items (commands or checks):
+${successCriteria}`;
   return `# Ralph Plan
 
 You are creating a task list for this repo.
@@ -664,10 +670,20 @@ You are creating a task list for this repo.
 Idea:
 ${idea}
 
+Context scan (read-only):
+- Quickly inspect top-level files to understand stack and conventions: README, package.json,
+  pyproject.toml, requirements.txt, go.mod, Cargo.toml, pom.xml, build.gradle, Makefile,
+  .nvmrc, Dockerfile, etc. Only inspect files that exist.
+- Use this context to infer file locations, tooling, and sensible commands.
+
 Requirements:
 - If there are open questions, ask them first and do not write ${tasksPath}.
 - Only ask a single round of questions, then stop and output: LOOP_COMPLETE.
 - Ask only what blocks concrete task creation. Prefer 3-6 precise, technical questions.
+- Consolidate related details into a single question (avoid duplicates or rephrasing).
+- Do not ask for info already provided in the idea or prior answers.
+- If details are missing but non-blocking, make a reasonable default and record it under
+  an "Assumptions" section in ${tasksPath}.
 - Use numbered questions. Make each question specific (route, env, file paths, commands).
 - If answers are provided, do not ask more questions. Make reasonable assumptions
   and proceed to write ${tasksPath}.
@@ -675,15 +691,15 @@ Requirements:
   asking new questions.
 - Output a Markdown task list to ${tasksPath} using \`- [ ]\` checkboxes.
 - Tasks must be atomic, ordered, and verifiable. Include exact file paths,
-  commands to run, and expected outcomes. Avoid vague verbs like "handle" or "improve".
-- Include a short "Success criteria" section with exactly these items (commands or checks):
-${successCriteria}
+  commands to run (if any), and expected outcomes. Avoid vague verbs like "handle" or "improve".
+- Keep scope minimal: avoid refactors unless required by the idea or to unblock tasks.
+${successCriteriaBlock}
 - Include a "Required tools" section using this exact format:
   - \`- apt: <comma-separated packages or none>\`
   - \`- npm: <comma-separated packages or none>\`
   - \`- pip: <comma-separated packages or none>\`
 - Do not edit any files other than ${tasksPath}.
-- Do not run tests or start dev servers during planning.
+- Do not run commands, tests, or start dev servers during planning.
 
 When done, output exactly: LOOP_COMPLETE
 `;
@@ -840,6 +856,7 @@ async function selectSuccessCriteria(
   standardChoices,
   detectedChoices = []
 ) {
+  const autoChoiceValue = "__auto__";
   const customChoiceValue = "__custom__";
   const defaults =
     defaultCriteria && defaultCriteria.length > 0
@@ -851,17 +868,25 @@ async function selectSuccessCriteria(
   const baseChoices = uniqueList([...standardChoices, ...extras]);
   const detectedSet = new Set(detectedChoices || []);
   const extraSet = new Set(extras);
-  const choices = baseChoices.map((choice) => {
-    let hint = "recommended";
-    if (detectedSet.has(choice)) hint = "detected";
-    if (extraSet.has(choice)) hint = "from config";
-    return {
-      name: choice,
-      message: choice,
-      value: choice,
-      hint,
-    };
-  });
+  const choices = [
+    {
+      name: autoChoiceValue,
+      message: "Ask Codex to choose",
+      value: autoChoiceValue,
+      hint: "Let Codex derive success criteria from tasks + repo.",
+    },
+    ...baseChoices.map((choice) => {
+      let hint = "recommended";
+      if (detectedSet.has(choice)) hint = "detected";
+      if (extraSet.has(choice)) hint = "from config";
+      return {
+        name: choice,
+        message: choice,
+        value: choice,
+        hint,
+      };
+    }),
+  ];
   choices.push({
     name: customChoiceValue,
     message: "Add custom command(s)",
@@ -883,6 +908,19 @@ async function selectSuccessCriteria(
   let selected = await prompt.run();
   if (!selected || selected.length === 0) {
     throw new Error("You must select at least one completion check.");
+  }
+
+  const wantsAuto = selected.includes(autoChoiceValue);
+  selected = selected.filter((item) => item !== autoChoiceValue);
+  if (wantsAuto) {
+    if (selected.length > 0) {
+      process.stdout.write(
+        `${colors.yellow(
+          'Note: "Ask Codex to choose" selected; ignoring other choices.'
+        )}\n`
+      );
+    }
+    return { mode: "auto", criteria: [] };
   }
 
   const wantsCustom = selected.includes(customChoiceValue);
@@ -907,7 +945,7 @@ async function selectSuccessCriteria(
     throw new Error("You must select at least one completion check.");
   }
 
-  return selected;
+  return { mode: "manual", criteria: selected };
 }
 
 async function confirmPlan(tasksFile) {
@@ -991,7 +1029,7 @@ async function main() {
   }
   fs.mkdirSync(agentDir, { recursive: true });
 
-  let selected = [];
+  let selection = { mode: "manual", criteria: [] };
   try {
     const fallbackChoices = [
       "Run the project's primary test suite",
@@ -1018,7 +1056,7 @@ async function main() {
     const defaults =
       configuredDefaults ||
       (detectedChoices.length > 0 ? detectedChoices : baseChoices);
-    selected = await selectSuccessCriteria(
+    selection = await selectSuccessCriteria(
       defaults,
       standardChoices,
       detectedChoices
@@ -1028,8 +1066,11 @@ async function main() {
     process.exit(1);
   }
 
-  const successCriteria = selected.map((item) => `  - \`${item}\``).join("\n");
-  const promptBase = buildPrompt(successCriteria);
+  const autoCriteria = selection.mode === "auto";
+  const successCriteria = selection.criteria
+    .map((item) => `  - \`${item}\``)
+    .join("\n");
+  const promptBase = buildPrompt({ successCriteria, autoCriteria });
 
   const first = await runCodex(promptBase, "Generating plan...");
   const questions = extractQuestions(first.output);
