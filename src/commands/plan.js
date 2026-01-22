@@ -675,6 +675,7 @@ Context scan (read-only):
   pyproject.toml, requirements.txt, go.mod, Cargo.toml, pom.xml, build.gradle, Makefile,
   .nvmrc, Dockerfile, etc. Only inspect files that exist.
 - Use this context to infer file locations, tooling, and sensible commands.
+ - You may use read-only commands like ls, rg, and cat to inspect files.
 
 Requirements:
 - If there are open questions, ask them first and do not write ${tasksPath}.
@@ -693,13 +694,18 @@ Requirements:
 - Tasks must be atomic, ordered, and verifiable. Include exact file paths,
   commands to run (if any), and expected outcomes. Avoid vague verbs like "handle" or "improve".
 - Keep scope minimal: avoid refactors unless required by the idea or to unblock tasks.
+- Use this exact section order and headings in ${tasksPath}:
+  1) # Tasks
+  2) ## Assumptions (only if needed)
+  3) ## Success criteria
+  4) ## Required tools
 ${successCriteriaBlock}
 - Include a "Required tools" section using this exact format:
   - \`- apt: <comma-separated packages or none>\`
   - \`- npm: <comma-separated packages or none>\`
   - \`- pip: <comma-separated packages or none>\`
 - Do not edit any files other than ${tasksPath}.
-- Do not run commands, tests, or start dev servers during planning.
+- Do not run write commands, tests, installs, or start dev servers during planning.
 
 When done, output exactly: LOOP_COMPLETE
 `;

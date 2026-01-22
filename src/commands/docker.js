@@ -122,12 +122,12 @@ function runCodex(prompt, codexConfig) {
 
 function buildPrompt(nodeVersion) {
   const nodeLine = nodeVersion ? `Node version: ${nodeVersion}` : "Node 20+";
-  return `Encuentra la mejor imagen base de Docker para este proyecto.
-Considera que necesita ejecutar npm scripts, módulos nativos y evitar Alpine.
+  return `Find the best Docker base image for this project.
+Consider that it needs to run npm scripts, native modules, and should avoid Alpine.
 ${nodeLine}
 
-Responde SOLO con una línea en este formato:
-BASE_IMAGE: <imagen>`;
+Respond with a single line in this format:
+BASE_IMAGE: <image>`;
 }
 
 async function main() {

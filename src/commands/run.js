@@ -356,6 +356,8 @@ ${result.output}
 Constraints:
 - Only edit ${dockerConfig.dockerfile}
 - Do not change other files
+- Keep the existing base image unless the error requires changing it
+- Do not add new dependencies unless required by the error
 - Do not ask questions
 - Output exactly: LOOP_COMPLETE
 `;
