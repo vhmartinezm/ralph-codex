@@ -11,13 +11,33 @@ Codex-first Ralph-style planning and run loops.
 - Optional Docker mode for reproducible runs.
 - Colorized Codex output in TTY for easier scanning (disable with `NO_COLOR=1`).
 
-![Ralph Codex normal workflow](docs/ralph-codex-workflow.png)
+## How it works
+
+- `plan` asks for success criteria, runs Codex, and writes `tasks.md`.
+- `run` executes tasks until `LOOP_COMPLETE`, updating `.ralph/` state and logs.
+- `revise` adds new tasks from feedback without touching existing items.
+- `view` and `reset` help you inspect and reset task status.
+
+![Ralph Codex workflow](docs/ralph-codex-workflow.png)
 
 ## Requirements
 
 - Node.js >= 18
 - Codex CLI installed and authenticated (`codex` available in PATH)
 - Docker (optional, only for Docker mode)
+
+## Codex CLI setup
+
+Install and verify:
+
+```bash
+npm install -g @openai/codex
+codex --help
+```
+
+Authenticate using the Codex CLI and/or create a profile in `~/.codex/config.toml`.
+Follow the auth guide at https://developers.openai.com/codex/auth.
+If you use profiles, pass `--profile` or set `codex.profile` in `ralph.config.yml`.
 
 ## Install
 
@@ -36,6 +56,45 @@ ralph-codex run
 ralph-codex revise "Improve the flow after QA"
 ralph-codex view
 ralph-codex reset
+```
+
+## Demo (sample output)
+
+```text
+$ ralph-codex plan "Add screenshot flow"
+... (interactive prompts) ...
+tasks.md written
+$ ralph-codex run
+... (loop output) ...
+LOOP_COMPLETE
+```
+
+## Cookbook
+
+### Basic flow
+
+```bash
+ralph-codex init
+ralph-codex plan "Add screenshot flow for /demo" --output tasks.md
+ralph-codex run --max-iterations 10
+```
+
+### Docker flow
+
+```bash
+ralph-codex docker
+# Ensure docker.codex_install is set in ralph.config.yml
+ralph-codex plan "Add screenshot flow for /demo"
+ralph-codex run
+```
+
+### Low-touch automation (still interactive)
+
+Use a prefilled config and pass flags to minimize prompts. This CLI still expects a TTY.
+
+```bash
+ralph-codex plan "Add screenshot flow" --full-auto --reasoning low
+ralph-codex run --full-auto --reasoning low
 ```
 
 ## Command reference
@@ -176,6 +235,7 @@ run:
   max_iterations: 15
   max_iteration_seconds: null
   max_total_seconds: null
+  completion_promise: LOOP_COMPLETE
 ```
 
 Codex settings quick guide:
@@ -189,12 +249,40 @@ Enable `plan.auto_detect_success_criteria` to add detected checks based on repo 
 
 CLI flags always override config values.
 
+## Defaults
+
+Defaults are from the template `ralph.config.yml`.
+
+| Setting | Default | Details |
+| --- | --- | --- |
+| `plan.tasks_path` | `tasks.md` | Output path for generated tasks. |
+| `plan.auto_detect_success_criteria` | `false` | Detect and suggest checks from the repo. |
+| `run.tasks_path` | `tasks.md` | Input path for tasks during runs. |
+| `run.max_iterations` | `15` | Max loop iterations before stopping. |
+| `run.completion_promise` | `LOOP_COMPLETE` | Completion token printed by the loop. |
+| `docker.enabled` | `false` | Enable Docker execution. |
+| `docker.use_for_plan` | `false` | Run planning inside Docker too. |
+
 ## Docker mode
 
 1. Run `ralph-codex docker` to pick a base image.
 2. Set `docker.codex_install` so Codex is available inside the container.
 3. Run `ralph-codex plan` and `ralph-codex run` as usual. Enable `docker.use_for_plan`
    if you want planning to happen inside Docker as well.
+
+Why Docker (especially with `danger-full-access`):
+- Isolation: lets you grant broad permissions inside the container without exposing your host.
+- Reproducibility: consistent OS/package stack across runs and teammates.
+- Safer cleanup: delete the container/image to reset state.
+
+Why `danger-full-access`:
+- Fewer approval prompts for tooling that needs broad filesystem or network access.
+- Works better for complex build/test flows that span many paths.
+- Faster iterations when you trust the environment (best paired with Docker).
+
+> **Warning**: Avoid `danger-full-access` on your host unless you fully trust the prompts,
+> scripts, and dependencies. It grants broad access to your machine and can write
+> outside the repo. Prefer Docker when you need this mode.
 
 `Dockerfile.ralph` is generated automatically when Docker is enabled.
 
@@ -209,12 +297,24 @@ CLI flags always override config values.
 Codex output is colorized when stdout is a TTY. Plan uses spinners and run shows a task
 progress bar when interactive. Set `NO_COLOR=1` to disable color styling.
 
+## Exit codes
+
+- `0` success.
+- `1` invalid usage or runtime error.
+
 ## Troubleshooting
 
 - `codex: command not found` -> install Codex CLI and ensure it is in PATH.
+- Auth errors (401/403) -> authenticate Codex CLI or select a valid profile.
+- `Missing tasks.md` -> run `ralph-codex plan` first or pass `--tasks`.
 - Docker errors -> start Docker Desktop/Colima and retry.
-- Plan/run fail to read config -> verify `ralph.config.yml` path or pass `--config`.
+- Config read errors -> verify `ralph.config.yml` path or pass `--config`.
 
-## License
+## Changelog and license
 
-MIT
+- Changelog: `CHANGELOG.md`
+- License: `LICENSE` (MIT)
+
+## Privacy
+
+ralph-codex does not add its own telemetry. It sends prompts and context to the Codex CLI you configure; follow your Codex policies and settings.
