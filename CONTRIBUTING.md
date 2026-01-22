@@ -39,6 +39,7 @@ The codex stub supports a few env overrides to customize behavior:
 - `CODEX_STUB_TASKS`: custom tasks.md content for plan/revise flows.
 - `CODEX_STUB_APPEND_TASK=1`: append a dummy task in revise flows.
 - `CODEX_STUB_BASE_IMAGE`: base image string for `ralph-codex docker`.
+- `CODEX_STUB_SKIP_TASK_COMPLETE=1`: keep tasks pending in run flows.
 - `RALPH_TEST_MODE=1`: bypass interactive prompts in init/plan/docker.
 
 ## Writing new tests

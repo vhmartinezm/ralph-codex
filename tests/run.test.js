@@ -47,4 +47,28 @@ Inputs:
       sandbox.cleanup();
     }
   });
+
+  it("ignores completion token when tasks are incomplete", () => {
+    const sandbox = createSandbox();
+    try {
+      const tasksPath = path.join(sandbox.cwd, "tasks.md");
+      writeFile(tasksPath, tasksTemplate);
+
+      const env = {
+        ...sandbox.env,
+        CODEX_STUB_SKIP_TASK_COMPLETE: "1",
+      };
+      const result = runCli(
+        ["run", "--max-iterations", "1", "--no-log-stream", "--no-tail"],
+        { cwd: sandbox.cwd, env },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain(
+        "Completion token received but tasks remain incomplete; continuing.",
+      );
+    } finally {
+      sandbox.cleanup();
+    }
+  });
 });

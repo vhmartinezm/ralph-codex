@@ -1144,8 +1144,33 @@ async function main() {
     }
 
     if (hasCompletion(result.output)) {
-      completed = true;
-      break;
+      const completionProgress = getTaskProgress(tasksFile);
+      if (
+        completionProgress.total > 0 &&
+        completionProgress.completed === completionProgress.total
+      ) {
+        completed = true;
+        break;
+      }
+
+      const pendingCount = Math.max(
+        0,
+        completionProgress.total -
+          completionProgress.completed -
+          completionProgress.blocked,
+      );
+      const reason =
+        completionProgress.total === 0
+          ? "no tasks detected"
+          : `${pendingCount} pending, ${completionProgress.blocked} blocked`;
+      notes.push(
+        `Completion token received but tasks remain incomplete (${reason}).`,
+      );
+      process.stdout.write(
+        `${colors.yellow(
+          "Completion token received but tasks remain incomplete; continuing.",
+        )}\n`,
+      );
     }
 
     if (iterationTimedOut) {

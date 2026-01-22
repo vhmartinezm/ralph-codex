@@ -96,6 +96,29 @@ if (prompt.includes("# Ralph Revise")) {
   process.exit(0);
 }
 
+if (prompt.includes("# Ralph Run")) {
+  const tasksPath =
+    extractPath([/-\s+([^\s]+)\s+\(task list,/i]) || "tasks.md";
+  const absoluteTasks = path.isAbsolute(tasksPath)
+    ? tasksPath
+    : path.join(cwd, tasksPath);
+  if (
+    fs.existsSync(absoluteTasks) &&
+    process.env.CODEX_STUB_SKIP_TASK_COMPLETE !== "1"
+  ) {
+    const content = fs.readFileSync(absoluteTasks, "utf8");
+    const updated = content.replace(
+      /^(\s*[-*]\s+\[)[ x~](\])/gm,
+      "$1x$2",
+    );
+    if (updated !== content) {
+      fs.writeFileSync(absoluteTasks, updated, "utf8");
+    }
+  }
+  process.stdout.write(`${completionToken || "LOOP_COMPLETE"}\n`);
+  process.exit(0);
+}
+
 if (prompt.includes("BASE_IMAGE:")) {
   const image = process.env.CODEX_STUB_BASE_IMAGE || "node:20-bullseye";
   process.stdout.write(`BASE_IMAGE: ${image}\n`);
